@@ -25,7 +25,6 @@ from datetime import timedelta, datetime
 from dateutil.parser import parse
 import csv
 from rubin_dash.utils import (
-    remove_high_dec,
     simulation_dates, 
     get_base_mjd,
     date_to_nightnum,
