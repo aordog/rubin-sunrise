@@ -20,7 +20,6 @@ Public API
 import numpy as np
 import pandas as pd
 import requests
-from rubin_dash.utils import make_fake_bands, make_fake_rot
 import sqlite3
 
 from rubin_dash.config import SIM_LSST_DB
@@ -67,13 +66,42 @@ def _target_visits_idxs(ra_t: float,
         np.where((dist < r_ang) & (status == 'Performed'))[0]
     )
 
+def _em_min_max_to_band(em_min, em_max):
+    """
+    Convert the wavelength minimum and maximum to band name.
+    From RSP tutorial: Commissioning/102_Rubin_Schedule_Viewer.ipynb
+
+    Parameters
+    ----------
+    em_min: float
+        Wavelength minimum, in m.
+    em_max: float
+        Wavelength maximum, in m.
+
+    Returns
+    -------
+    band: string
+        Band (filter) name.
+    """
+
+    band = None
+    band_dict = {'u': (2.95e-7, 4.05e-7), 'g': (4.00e-7, 5.55e-7),
+                 'r': (5.50e-7, 6.92e-7), 'i': (6.90e-7, 8.20e-7),
+                 'z': (8.15e-7, 9.25e-7), 'y': (9.20e-7, 11.1e-7)}
+    for b in band_dict.keys():
+        if em_min > band_dict[b][0] and em_max < band_dict[b][1]:
+            band = b
+    #if band is None:
+    #    print(em_min, em_max, ' no band found')
+
+    return band
 
 def rsv_service(date: str) -> pd.DataFrame:
     """Query Rubin Schedule Viewer for observation visits.
 
     Retrieves scheduled observation data from the Rubin Schedule Viewer (RSV) 
     service for a specified date. The service returns visit information 
-    including sky coordinates and execution status.
+    including sky coordinates, execution status and bands for visits.
 
     Parameters
     ----------
@@ -84,7 +112,7 @@ def rsv_service(date: str) -> pd.DataFrame:
     -------
     pd.DataFrame
         Observation visit data with columns: s_ra, s_dec, execution_status, 
-        obs_id, and others from RSV.
+        obs_id, and others from RSV. Also includes derived variable, 'band'
 
     Raises
     ------
@@ -114,7 +142,15 @@ def rsv_service(date: str) -> pd.DataFrame:
     print(f"Rubin Schedule Forecast at {response.url} is alive.")
     print(response.url)
 
-    return pd.DataFrame(response.json())
+    # Calculate bands using RSP function and add this to dataframe:
+    visits = pd.DataFrame(response.json())
+    bands = []
+    for i in range(0,len(visits)):
+        bands.append(_em_min_max_to_band(visits['em_min'][i], 
+                                         visits['em_max'][i]))
+    visits['band'] = bands
+
+    return visits
 
 def sim_service(nightnum):
     """Query simulated LSST database for observation visits on a night.
@@ -152,12 +188,12 @@ def sim_service(nightnum):
 
         ra, dec, rot, band, obs_id = [np.array(x) for x in zip(*rows)]
 
-        visits["s_ra"]   = ra
-        visits["s_dec"]  = dec
-        visits["rot"]    = rot
-        visits["band"]   = band
-        visits["obs_id"] = obs_id
-        visits["execution_status"] = ['Performed']*len(ra)
+        visits["s_ra"]              = ra
+        visits["s_dec"]             = dec
+        visits["rubin_rot_sky_pos"] = rot
+        visits["band"]              = band
+        visits["obs_id"]            = obs_id
+        visits["execution_status"]  = ['Performed']*len(ra)
     
     return pd.DataFrame(visits)
 
@@ -254,12 +290,12 @@ def _create_visits_df(night_data: dict) -> pd.DataFrame:
 
     """
     visits = {}
-    visits["s_ra"] = np.array(night_data['ra'])
-    visits["s_dec"] = np.array(night_data['dec'])
-    visits["rot"] = np.array(night_data['rot'])
-    visits["band"] = np.array(night_data['band'])
-    visits["obs_id"] = np.array(night_data['obs_id'])
-    visits["execution_status"] = ['Performed'] * len(night_data['ra'])
+    visits["s_ra"]              = np.array(night_data['ra'])
+    visits["s_dec"]             = np.array(night_data['dec'])
+    visits["rubin_rot_sky_pos"] = np.array(night_data['rot'])
+    visits["band"]              = np.array(night_data['band'])
+    visits["obs_id"]            = np.array(night_data['obs_id'])
+    visits["execution_status"]  = ['Performed'] * len(night_data['ra'])
     
     return pd.DataFrame(visits)
 
@@ -296,10 +332,6 @@ def get_visit_metadata(visits,
     execution_status == 'Performed' are included. Uses helper
     _target_visits_idxs to identify matching visits.
 
-    Band and rotation data handling:
-    - If available in input data, uses actual values
-    - Otherwise simulates values via make_fake_bands() and make_fake_rot()
-    from utils.py module
     """
     r = 3.0
     ra = np.array(visits["s_ra"])
@@ -310,20 +342,10 @@ def get_visit_metadata(visits,
     idxs = _target_visits_idxs(ra_t, dec_t, r, ra, dec, status)
 
     visits_use = {}
-    visits_use['ra'] = ra[idxs]
-    visits_use['dec'] = dec[idxs]
-    if 'band' in visits.columns:
-        visits_use['band'] = np.array(visits["band"])[idxs]
-        #print('Have filter info!')
-    else:
-        visits_use['band'] = make_fake_bands(len(idxs))
-        #print('Simulating filter info!')
-    if 'rot' in visits.columns:
-        visits_use['rot'] = np.array(visits["rot"])[idxs]
-        #print('Have camera rotation info!')
-    else:
-        visits_use['rot'] = make_fake_rot(len(idxs))
-        #print('Simulating camera rotation info!')
+    visits_use['ra']   = ra[idxs]
+    visits_use['dec']  = dec[idxs]
+    visits_use['band'] = np.array(visits["band"])[idxs]
+    visits_use['rot']  = np.array(visits["rubin_rot_sky_pos"])[idxs]
 
     return visits_use
 

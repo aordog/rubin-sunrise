@@ -2,15 +2,14 @@
 Utility functions for prototyping and development.
 
 Provides helper functions for the prototyping phase of the dashboard,
-including fake data generation (camera angles, filter bands, date ranges)
-and coordinate transformations. These are temporary utilities that will be
-replaced by real data from the Rubin scheduler as the system matures.
+including fake data generation (target list and date ranges)
+and coordinate transformations. TO DO: determine where these should
+ultimately go instead of generic 'utilities'
 
 **Author:** Anna Ordog
 """
 
 import numpy as np
-import random  
 import healpy as hp
 from datetime import datetime, timedelta
 from astropy.time import Time
@@ -71,48 +70,6 @@ def make_fake_src_list(nside, declim):
 
     return remove_high_dec(ra.astype(float), 
                            dec.astype(float), declim)
-
-def make_fake_bands(nvisits):
-    """Generate random filter bands for simulated visits.
-
-    Creates a list of randomly selected LSST filter bands to assign to
-    simulated observation visits. Used in the prototyping phase to add filter
-    diversity to simulated observing programs when using datasets such as RSV
-    that currently lack this information.
-
-    Parameters
-    ----------
-    nvisits : int
-        Number of visits to generate filter bands for.
-
-    Returns
-    -------
-    list[str]
-        List of nvisits filter band codes, each one of ('u','g','r','i','z','y').
-    """
-    bands = ['u','g','r','i','z','y']
-
-    return random.choices(bands, k=nvisits)
-
-def make_fake_rot(nvisits):
-    """Generate fake camera rotation angles for simulated visits.
-
-    Returns random rotation angles in the range [0, 90) degrees for each
-    simulated visit. Used in the prototyping phase to simulate realistic
-    visit metadata.
-
-    Parameters
-    ----------
-    nvisits : int
-        Number of simulated visits to generate rotation angles for.
-
-    Returns
-    -------
-    list[float]
-        List of rotation angles in degrees, one per visit.
-    """
-    return [random.uniform(0, 90) for _ in range(nvisits)]
-
 
 def simulation_dates(sim_start: datetime, sim_end: datetime) -> list[str]:
     """Generate list of simulated survey dates.

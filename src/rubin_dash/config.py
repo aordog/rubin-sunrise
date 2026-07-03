@@ -16,7 +16,7 @@ from astropy import coordinates as coord
 ########### USER INPUTS #########
 QUERY_FILE     = "moon_test.csv" # File with user-selected targets
 INITIAL_OFFSET = 0.0               # declination limit to filter targets
-OBS_FLAGS      = True            # Additional observability flags available
+OBS_FLAGS      = False            # Additional observability flags available
 #################################
 
 # Server-side info
@@ -29,11 +29,11 @@ DAYS_FORECAST = 30 # Number of days for which to calculate observability
 LOC = coord.EarthLocation.of_site('LSST') # Rubin location for obs. plots
 
 # Simulated LSST survey (for testing)
-QUERY_TYPE = 'SIM' # Options: RSV, SIM
+QUERY_TYPE = 'RSV' # Options: RSV, SIM
 REFRESH_INTERVAL: int = 60 # refresh rate for simulated iterations
-SIM_HIST  = datetime(2025, 9, 1) # simulated historical data (prior to query)
-SIM_START = datetime(2025, 9, 4)  # simulated days start
-SIM_END   = datetime(2025, 12, 31) # simulated days end
+SIM_HIST  = datetime(2026, 6, 1) # simulated historical data (prior to query)
+SIM_START = datetime(2026, 6, 4)  # simulated days start
+SIM_END   = datetime(2026, 7, 2) # simulated days end
 VERBOSE = False  # Show debug columns in table (gr_name, gr_num, mem_num)
 SIM_LSST_DB = "baseline_v3.3_200day.db"
 
