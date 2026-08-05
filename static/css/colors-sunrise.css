@@ -1,0 +1,11 @@
+/* sunrise theme option */
+:root {
+  --c-background: #FDFEFE;
+  --c-headers   : white;
+  --c-tablebrdr : #F1C40F;
+  --c-tabletext : black;
+  --c-hover     : #C0392B;
+  --c-highlights: #E67E22;
+  --c-plots     : #1C2541;
+  --c-outlines  : #0B132B;
+}

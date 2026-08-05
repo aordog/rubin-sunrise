@@ -134,6 +134,8 @@ def _make_html_table(data):
         for col in df.columns:
             if col in BANDS:
                 html += f"<td>{int(row[col])}</td>"
+            elif col in ('ra', 'dec'):
+                html += f"<td>{row[col]:.5f}</td>"
             else:
                 html += f"<td>{row[col]}</td>"
         html += "</tr>\n"
@@ -237,8 +239,8 @@ def _make_html_visits_map(data, idx_mem, maptype):
                         specs = specs,
                         vertical_spacing=0.1,
                         horizontal_spacing=0.01)
-    title = f"<b>RA = {data['ra_mem'][idx_mem]}&deg;, dec = {data['dec_mem'][idx_mem]}&deg;</b>"
-    fig.update_layout(title=dict(text=title, x=0.5, xanchor="center"))
+    title = f"<b>RA = {data['ra_mem'][idx_mem]:.5f}&deg;, dec = {data['dec_mem'][idx_mem]:.5f}&deg;</b>"
+    fig.update_layout(title=dict(text=title, x=0.5, xanchor="center", font=dict(color='white')))
 
     if maptype == 'daily':
         Nmax = max(arr.max() for arr in data['masks']['latest'].values())+1
@@ -294,13 +296,17 @@ def _make_html_visits_map(data, idx_mem, maptype):
                             scaleratio=1, row=row, col=col)
             fig.for_each_annotation(lambda a: a.update(font_size=16, y=a.y+0.001))
 
-    fig.update_xaxes(showline=True, linewidth=1, linecolor='black', mirror=True,
-                    showgrid=False, zeroline=False)
-    fig.update_yaxes(showline=True, linewidth=1, linecolor='black', mirror=True,
-                    showgrid=False, zeroline=False)
+    fig.update_xaxes(showline=True, linewidth=1, linecolor='white', mirror=True,
+                    showgrid=False, zeroline=False, title_font=dict(color='white'), tickfont=dict(color='white'))
+    fig.update_yaxes(showline=True, linewidth=1, linecolor='white', mirror=True,
+                    showgrid=False, zeroline=False, title_font=dict(color='white'), tickfont=dict(color='white'))
     fig.update_xaxes(title_text="RA (deg.)", row=2)
     fig.update_yaxes(title_text="Dec (deg.)", col=1)
-    fig.update_layout(showlegend=True, margin=dict(l=60, r=40, t=50, b=50))
+    fig.update_layout(showlegend=True, 
+                      margin=dict(l=60, r=40, t=50, b=50),
+                      plot_bgcolor='rgba(0,0,0,0)',
+                      paper_bgcolor='rgba(0,0,0,0)',
+                      font=dict(color='white'))
 
     fig.update_layout(autosize=True, width=None, height=None)
 
@@ -391,7 +397,7 @@ def _make_html_visits_plot(data, idx_mem, maptype):
         HTML string with embedded Plotly figure (div and script tags).
     """
     fig = make_subplots(rows=1, cols=1,specs=[[{"type": "scatter"}]])
-    title = f"<b>RA = {data['ra_mem'][idx_mem]}&deg;, dec = {data['dec_mem'][idx_mem]}&deg;</b>"
+    title = f"<b>RA = {data['ra_mem'][idx_mem]:.5f}&deg;, dec = {data['dec_mem'][idx_mem]:.5f}&deg;</b>"
     fig.update_layout(title=dict(text=title, x=0.5, xanchor="center"))
 
     # Get colors from seaborn's colorblind palette with specific indices for better distinction
@@ -418,16 +424,10 @@ def _make_html_visits_plot(data, idx_mem, maptype):
             row=1, col=1
         )
 
-    fig.update_xaxes(title_text="Date", row=1, showgrid=True, gridcolor='#d3d3d3', showline=True, mirror=True)
-    fig.update_yaxes(title_text="Number of visits", col=1, showgrid=True, gridcolor='#d3d3d3', showline=True, mirror=True)
+    fig.update_xaxes(title_text="Date", row=1, showgrid=True, gridcolor='#d3d3d3', showline=True, mirror=True, linecolor='white', title_font=dict(color='white'), tickfont=dict(color='white'))
+    fig.update_yaxes(title_text="Number of visits", col=1, showgrid=True, gridcolor='#d3d3d3', showline=True, mirror=True, linecolor='white', title_font=dict(color='white'), tickfont=dict(color='white'))
     
-    # Get the font color from Plotly's default template and apply it to axes
-    template = pio.templates["plotly"]
-    font_color = template.layout.font.color or '#444'
-    fig.update_xaxes(linecolor=font_color, row=1)
-    fig.update_yaxes(linecolor=font_color, col=1)
-    
-    fig.update_layout(showlegend=True, margin=dict(l=60, r=40, t=50, b=50), plot_bgcolor='white')
+    fig.update_layout(showlegend=True, margin=dict(l=60, r=40, t=50, b=50), plot_bgcolor='white', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white'))
 
     fig.update_layout(autosize=True, width=None, height=None)
 
@@ -535,7 +535,7 @@ def _make_html_obs_plot(data, selected_date=None, window_days=5):
         HTML string with embedded Plotly figure (div and script tags).
     """
     fig = make_subplots(rows=2, cols=1, specs=[[{"type": "scatter"}]]*2)
-    title = f"<b>RA = {data['ra']}&deg;, dec = {data['dec']}&deg;</b>"
+    title = f"<b>RA = {data['ra']:.5f}&deg;, dec = {data['dec']:.5f}&deg;</b>"
     fig.update_layout(title=dict(text=title, x=0.5, xanchor="center"))
 
     # Calculate x-axis range for bottom panel and red dot position
@@ -710,18 +710,15 @@ def _make_html_obs_plot(data, selected_date=None, window_days=5):
         tickvals=[-45, 0, 45, 90],
         ticktext=['-45°', '0°', '45°', '90°'],
         showline=True, mirror=True,
-        row=2, col=1
+        row=2, col=1,
+        linecolor='white', title_font=dict(color='white'), tickfont=dict(color='white')
     )
     
-    # Get the font color from Plotly's default template and apply it to axes
-    template = pio.templates["plotly"]
-    font_color = template.layout.font.color or '#444'
-    fig.update_xaxes(linecolor=font_color, row=1, col=1)
-    fig.update_xaxes(linecolor=font_color, row=2, col=1)
-    fig.update_yaxes(linecolor=font_color, row=1, col=1)
-    fig.update_yaxes(linecolor=font_color, row=2, col=1)
+    fig.update_xaxes(linecolor='white', row=1, col=1, title_font=dict(color='white'), tickfont=dict(color='white'))
+    fig.update_xaxes(linecolor='white', row=2, col=1, title_font=dict(color='white'), tickfont=dict(color='white'))
+    fig.update_yaxes(linecolor='white', row=1, col=1, title_font=dict(color='white'), tickfont=dict(color='white'))
     
-    fig.update_layout(showlegend=False, margin=dict(l=60, r=40, t=50, b=50), plot_bgcolor='white') 
+    fig.update_layout(showlegend=False, margin=dict(l=60, r=40, t=50, b=50), plot_bgcolor='white', paper_bgcolor='rgba(0,0,0,0)', font=dict(color='white')) 
     fig.update_layout(autosize=True, width=None, height=None)
 
     fig_html = fig.to_html(full_html=False, div_id='figure3',
