@@ -1,23 +1,51 @@
+/* ---------- Hero Section ---------- */
+.hero {
+    background: url('/static/sunrise_background.png') center / cover no-repeat;
+    height: 300px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.hero-title {
+    text-align: center;
+    z-index: 2;
+    position: relative;
+    top: -40px;
+}
+
+.hero-title h1 {
+    font-size: 48px;
+    color: white;
+    margin: 0;
+    padding: 0;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+.hero-cameras {
+    position: absolute;
+    left: 20px;
+    top: 30px;
+    height: 100px;
+    width: auto;
+    z-index: 3;
+}
+.hero-logo {
+    position: absolute;
+    right: 20px;
+    top: 20px;
+    height: 150px;
+    width: auto;
+    z-index: 3;
+}
+
 /* ---------- Header ---------- */
 h1 {
     font-size: 40px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    text-align: center;
-    background-color: var(--c-background);
-    z-index: 20;
+    background-color: transparent;
     margin: 0;
-    padding: 10px 0;
-    display: flex;              /* align logo + text side by side */
-    align-items: center;        /* vertically centre them */
-    justify-content: center;    /* horizontally centre them */
-    gap: 24px;                  /* space between logo and text */
-}
-.header-logo {
-    height: 80px;               /* Scale logo to fit the header */
-    width: auto;                 /* Maintain aspect ratio */
+    padding: 0;
 }
 
 /* ---------- General formatting ---------- */
@@ -25,6 +53,10 @@ body {
     background: var(--c-background);
     color: var(--c-headers);
     font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+.container {
     margin: 15px;
 }
 h2 {
@@ -36,13 +68,13 @@ h2 {
     display: flex;
     gap: 5px;
     align-items: flex-start;
-    margin-top: 100px;
+    margin-top: 0px;
     width: 100%;
     box-sizing: border-box;
 }
 .left-column {
     position: sticky;              /* was: fixed */
-    top: 100px;
+    top: 20px;
     /* REMOVED: left: 15px          — flex handles placement now */
     /* REMOVED: width: calc(...)    — use flex instead */
     flex: 0 0 40%;                 /* don't grow, don't shrink, 40% wide */
@@ -91,11 +123,12 @@ h2 {
     border: 1px solid var(--c-outlines);
     table-layout: auto;
     width: max-content;
-    max-width: 100%;           
+    max-width: 100%;
+    background-color: var(--c-background);
 }
 
 .data-table th {
-    background-color: var(--c-tablebrdr);
+    background-color: var(--c-background);
     color: var(--c-tabletext);
     padding: 6px 12px;
     text-align: center;
@@ -106,6 +139,8 @@ h2 {
     padding: 6px 12px;
     border: 1px solid var(--c-outlines);
     text-align: center;
+    background-color: var(--c-background);
+    color: var(--c-tabletext);
 }
 .data-table td:first-child {
     background-color: var(--c-tablebrdr);
@@ -149,7 +184,7 @@ h2 {
 #flag-message {
     text-align: center;
     font-size: 14px;
-    color: var(--c-headers);
+    color: var(--c-tabletext);
     padding: 8px 0;
 }
 
@@ -157,7 +192,7 @@ h2 {
 #countdown-display {
     text-align: center;
     font-size: 14px;
-    color: var(--c-headers);
+    color: var(--c-tabletext);
     padding: 8px 0;
 }
 #countdown-value {
@@ -166,8 +201,9 @@ h2 {
 }
 
 .progress-track {
-    background: var(--c-hover);
+    background: var(--c-tablebrdr);
     border-radius: 8px;
+    border: 2px solid var(--c-plots);
     height: 18px;
     width: 100%;
     margin-top: 6px;
@@ -180,7 +216,7 @@ h2 {
     width: 0%;
     border-radius: 8px;
     transition: width 0.5s ease;
-    background: var(--c-highlights);
+    background: var(--c-hover);
 }
 
 /* ---------- Map-type toggle buttons ---------- */
@@ -193,7 +229,7 @@ h2 {
     padding: 10px 20px;
     font-size: 14px;
     font-weight: bold;
-    border: 2px solid var(--c-headers);
+    border: 2px solid var(--c-plots);
     border-radius: 6px;
     background-color:  var(--c-plots);
     color: var(--c-headers);
