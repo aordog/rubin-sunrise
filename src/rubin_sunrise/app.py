@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING
 import psycopg2.extras
 from flask import Flask, jsonify, render_template, request
 
-from rubin_dash.pipeline import _reclaim_memory
-from rubin_dash.displays import TargetMap, TargetTimeSeries, ObservabilityData
+from rubin_sunrise.pipeline import _reclaim_memory
+from rubin_sunrise.displays import TargetMap, TargetTimeSeries, ObservabilityData
 if TYPE_CHECKING:
-    from rubin_dash.state import SharedState
+    from rubin_sunrise.state import SharedState
 
 
 def create_app(

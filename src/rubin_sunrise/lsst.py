@@ -22,7 +22,7 @@ import pandas as pd
 import requests
 import sqlite3
 
-from rubin_dash.config import SIM_LSST_DB
+from rubin_sunrise.config import SIM_LSST_DB
 
 
 def _target_visits_idxs(ra_t: float,

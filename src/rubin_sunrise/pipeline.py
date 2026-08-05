@@ -1,5 +1,5 @@
 """
-pipeline.py: Data-processing pipeline for rubin-dash.
+pipeline.py: Data-processing pipeline for rubin-sunrise.
 
 This module manages the background data loop that periodically updates the
 user-specific database and generates visualizations, and provides a 
@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from astropy.time import Time
 from datetime import timedelta
 
-from rubin_dash.config import (
+from rubin_sunrise.config import (
     REFRESH_INTERVAL, 
     SIM_START, 
     SIM_END,
@@ -33,22 +33,22 @@ from rubin_dash.config import (
     QUERY_TYPE,
     DAYS_FORECAST,
 )
-from rubin_dash.utils import (
+from rubin_sunrise.utils import (
     simulation_dates, 
     get_base_mjd,
     date_to_nightnum,
 )
-from rubin_dash.database import populate_database, populate_forecast
-from rubin_dash.displays import (
+from rubin_sunrise.database import populate_database, populate_forecast
+from rubin_sunrise.displays import (
     TableData,
     TargetMap,
     TargetTimeSeries,
     ObservabilityData,
 )
-from rubin_dash.lsst import rsv_service, sim_service
+from rubin_sunrise.lsst import rsv_service, sim_service
 
 if TYPE_CHECKING:
-    from rubin_dash.state import SharedState
+    from rubin_sunrise.state import SharedState
 
 # C-level memory reclamation (glibc-specific; unavailable on macOS/Windows):
 _libc = None
