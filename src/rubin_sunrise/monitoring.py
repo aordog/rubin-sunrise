@@ -30,10 +30,10 @@ import os, psutil
 import numpy as np
 import pandas as pd
 
-from rubin_dash.config import PORT, STRESS_TEST_CLICK_INTERVAL
+from rubin_sunrise.config import PORT, STRESS_TEST_CLICK_INTERVAL
 
 if TYPE_CHECKING:
-    from rubin_dash.state import SharedState
+    from rubin_sunrise.state import SharedState
 
 
 def _fetch_valid_rows(cur) -> list[dict]:

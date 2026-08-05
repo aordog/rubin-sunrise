@@ -24,21 +24,21 @@ from psycopg2 import extras
 from datetime import timedelta, datetime
 from dateutil.parser import parse
 import csv
-from rubin_dash.utils import (
+from rubin_sunrise.utils import (
     simulation_dates, 
     get_base_mjd,
     date_to_nightnum,
 )
-from rubin_dash.lsst import (
+from rubin_sunrise.lsst import (
     get_camera, 
     get_visit_metadata,
     rsv_service,
     sim_service_range,
 )
-from rubin_dash.observability import daily_observability, get_az_el
+from rubin_sunrise.observability import daily_observability, get_az_el
 
 import subprocess
-from rubin_dash.config import (
+from rubin_sunrise.config import (
     DB_NAME, SIM_HIST, SIM_START, QUERY_TYPE, SIM_LSST_DB, DAYS_FORECAST, OBS_FLAGS,
 )
 

@@ -1,7 +1,7 @@
 """
 Dashboard application entry point and orchestration.
 
-Entry point for ``python -m rubin_dash``. Orchestrates full startup
+Entry point for ``python -m rubin_sunrise``. Orchestrates full startup
 of the dashboard application including database initialization, Flask
 app creation, background data processing pipeline, resource monitoring,
 and optional stress testing. Manages all background threads and cleanup.
@@ -16,7 +16,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from rubin_dash.config import (
+from rubin_sunrise.config import (
     DEFAULT_USER_ID,
     INITIAL_OFFSET,
     MEM_TEST_MODE,
@@ -25,19 +25,19 @@ from rubin_dash.config import (
     QUERY_FILE,
 )
  
-from rubin_dash.database import (
+from rubin_sunrise.database import (
     initialize_tracking, set_up_db, populate_history, initialize_forecast,
 )
-from rubin_dash.state import SharedState
-from rubin_dash.pipeline import data_loop
-from rubin_dash.app import create_app
-from rubin_dash.monitoring import (stress_test, 
+from rubin_sunrise.state import SharedState
+from rubin_sunrise.pipeline import data_loop
+from rubin_sunrise.app import create_app
+from rubin_sunrise.monitoring import (stress_test, 
                                     monitor_resources, 
                                     monitoring_plots,
                                     QuietFilter,
                                     Logger)
 
-# Resolve project root (…/src/rubin_dash/__main__.py  →  …/)
+# Resolve project root (…/src/rubin_sunrise/__main__.py  →  …/)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
@@ -71,7 +71,7 @@ def main() -> None:
 
     Configuration Parameters
     --------
-    All parameters read from rubin_dash.config:
+    All parameters read from rubin_sunrise.config:
     - PORT: Flask server port
     - DEFAULT_USER_ID: Database user identifier
     - INITIAL_OFFSET: Declination limit for target filtering

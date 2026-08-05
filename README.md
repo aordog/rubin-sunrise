@@ -7,9 +7,9 @@ The current version is in a prototyping phase, using data from either the Rubin 
 
 1. Clone the project repository from github:
 
-    `git clone git@github.com:aordog/rubin-dash.git`
+    `git clone git@github.com:aordog/rubin-sunrise.git`
 
-2. Switch to the `rubin-dash` directory, create a new environment (recommended to avoid dependency conflicts), and activate the environment:
+2. Switch to the `rubin-sunrise` directory, create a new environment (recommended to avoid dependency conflicts), and activate the environment:
 
     `python -m venv .rubin_test_venv`
 
@@ -89,7 +89,7 @@ Set the following parameters in `config.py`:
 
 **Run the code like this:**
 
-`python -m rubin_dash`
+`python -m rubin_sunrise`
 
 Note, **using the medium example query** (663 targets), before the dashboard is displayed:
 
@@ -101,9 +101,9 @@ The web-app should open in your default web browser, and the displays (table and
 ---
 ## Project Structure
 ```
-rubin-dash/
+rubin-sunrise/
 ├── src/
-│   └── rubin_dash/
+│   └── rubin_sunrise/
 │        ├── __init__.py
 │        ├── __main__.py       # entry point
 │        ├── config.py         # parameters and tunables

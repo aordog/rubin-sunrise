@@ -20,7 +20,7 @@ from astropy import coordinates as coord
 import numpy as np
 import ephem
 
-from rubin_dash.config import LOC
+from rubin_sunrise.config import LOC
 
 def get_az_el(ra_arr, dec_arr, day):
     """Calculate azimuth and elevation for targets over a night.

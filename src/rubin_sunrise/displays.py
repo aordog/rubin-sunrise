@@ -24,8 +24,8 @@ import seaborn as sns
 from astropy.time import Time
 from datetime import timedelta
 
-from rubin_dash.config import VERBOSE, DAYS_FORECAST
-from rubin_dash.observability import el_vs_time
+from rubin_sunrise.config import VERBOSE, DAYS_FORECAST
+from rubin_sunrise.observability import el_vs_time
 
 BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
 MASK_COLS = [f'{b}mask' for b in BANDS]

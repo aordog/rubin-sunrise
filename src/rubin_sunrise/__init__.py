@@ -6,7 +6,7 @@ during LSST survey observations (simulated for now). Displays visit counts,
 coverage, time series, and observability forecasts for user-selected targets.
 
 To run the dashboard:
-    python -m rubin_dash
+    python -m rubin_sunrise
 
 Upon startup, the dashboard:
 - Initializes a PostgreSQL database with user's target catalog
@@ -14,13 +14,13 @@ Upon startup, the dashboard:
 - Launches a background data processing pipeline
 - Opens the web interface in your default browser
 
-All configuration is defined in rubin_dash/config.py.
+All configuration is defined in rubin_sunrise/config.py.
 """
 
 from importlib.metadata import version, PackageNotFoundError
 
 try:
-    __version__ = version("rubin-dash")
+    __version__ = version("rubin-sunrise")
 except PackageNotFoundError:
     __version__ = "0.1.0.dev0"
 
