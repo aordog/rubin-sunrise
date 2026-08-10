@@ -1,0 +1,2 @@
+No.|Object Name|RA|DEC
+1|high_dec|150.09059 | -70.62229 

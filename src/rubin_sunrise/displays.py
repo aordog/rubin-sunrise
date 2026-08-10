@@ -607,11 +607,11 @@ def _make_html_obs_plot(data, selected_date=None, window_days=5):
         line_width=0,
         row=2, col=1
     )
-    for i in range(0,len(sunrise_list)):
+    for i in range(0,len(sunrise_list)-1):
         fig.add_shape(
             type="rect",
             x0=Time(sunrise_list[i]).iso, 
-            x1=Time(sunset_list[i]).iso,
+            x1=Time(sunset_list[i+1]).iso,
             y0=15,
             y1=86.5,
             fillcolor="deepskyblue",
@@ -621,11 +621,11 @@ def _make_html_obs_plot(data, selected_date=None, window_days=5):
             xref="x2",
             yref="y2"
         )
-    for i in range(0,len(sunrise_list)-1):
+    for i in range(0,len(sunrise_list)):
         fig.add_shape(
             type="rect",
             x0=Time(sunset_list[i]).iso, 
-            x1=Time(sunrise_list[i+1]).iso,
+            x1=Time(sunrise_list[i]).iso,
             y0=15,
             y1=86.5,
             fillcolor="black",
