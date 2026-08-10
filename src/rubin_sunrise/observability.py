@@ -17,10 +17,45 @@ Public API
 """
 from astropy.time import Time
 from astropy import coordinates as coord
+from astropy import units as u
 import numpy as np
 import ephem
 
-from rubin_sunrise.config import LOC
+from rubin_sunrise.config import LOC, DT
+
+def _get_sunrise_sunset(obs, day):
+    """Calculate sunset and sunrise times for a given day.
+
+    Computes the sunset and sunrise times for a specified date at Rubin
+    location defined by the observer object. Sunset is computed from the 
+    previous day to ensure it occurs before sunrise on the current day.
+
+    Parameters
+    ----------
+    obs : ephem.Observer
+        Observatory location and observer object from pyephem.
+    day : str or datetime
+        Query date (ISO format string or datetime object).
+
+    Returns
+    -------
+    tuple of (datetime, datetime)
+        (sunset, sunrise) where:
+        - sunset : Datetime of the sunset before the given day
+        - sunrise : Datetime of the sunrise on the given day
+    """
+
+    start_date = Time(day).iso
+    
+    # Get sunset on previous day to ensure sunset is before sunrise:
+    obs.date = str(Time(start_date, format="iso", scale="utc") - 1*u.day)
+    sunset  = obs.next_setting(ephem.Sun()).datetime()
+
+    # Get sunrise on this day:
+    obs.date = str(start_date)
+    sunrise = obs.next_rising(ephem.Sun()).datetime()
+
+    return sunset, sunrise
 
 def get_az_el(ra_arr, dec_arr, day):
     """Calculate azimuth and elevation for targets over a night.
@@ -54,12 +89,10 @@ def get_az_el(ra_arr, dec_arr, day):
     - Observatory location is defined by LOC in config.py
     """
 
-    dt = 5.0 / 60.  # hours
-
     start_date = Time(day).iso
 
     # Set up time array:
-    dmjd_arr = np.arange(0, 2+dt/24., dt/24.)
+    dmjd_arr = np.arange(-1, 1+DT/24., DT/24.) * u.day
     t_utc = Time(start_date, format="iso", scale="utc") + dmjd_arr
 
     c = coord.SkyCoord(ra_arr, dec_arr, frame='icrs', unit='deg')
@@ -96,14 +129,7 @@ def daily_observability(el_t, day, t_utc):
     - Minimum elevation cutoff is fixed at 15 degrees
     - Nighttime is defined as time between sunset and next day sunrise
     - Observatory location is defined by LOC in config.py
-    - Time sampling interval is 5 minutes
     """
-
-    start_date = Time(day).iso
-
-    # Set up array of days (expand 1 day beyond range in both directions):
-    days_mjd = np.arange(-1.0, 1.0, 1.0)
-    days_utc = Time(start_date, format="iso", scale="utc") + days_mjd
 
     # Set up observer object and populate:
     obs = ephem.Observer()
@@ -111,24 +137,15 @@ def daily_observability(el_t, day, t_utc):
     obs.lat  = str(LOC.geodetic.lat.deg) #Note that lat should be string
     obs.elev = LOC.geodetic.height.value
 
-    # Loop to record sunrises and sunsets:
-    sunrise_list = []
-    sunset_list  = []
-    for i in range(0,len(days_utc)):
+    # Get sunrise and sunset:
+    sunset, sunrise = _get_sunrise_sunset(obs, day)
 
-        obs.date = str(days_utc[i])
-        sunrise = obs.next_rising(ephem.Sun()).datetime()
-        sunrise_list.append(sunrise)
-
-        obs.date = str(days_utc[i])
-        sunset = obs.next_setting(ephem.Sun()).datetime()
-        sunset_list.append(sunset)
-
-    idx_count = np.where((Time(t_utc).mjd>Time(sunset_list[0]).mjd) & 
-                            (Time(t_utc).mjd<Time(sunrise_list[1]).mjd) & 
-                            (el_t>15))[0]
+    # Determine when source is between sunset and sunrise and above min el:
+    idx_count = np.where((Time(t_utc).mjd>Time(sunset).mjd) & 
+                         (Time(t_utc).mjd<Time(sunrise).mjd) & 
+                         (el_t>15))[0]
     if len(idx_count) > 0:
-        hrs = (Time(t_utc[idx_count[-1]]).mjd - Time(t_utc[idx_count[0]]).mjd)*24.
+        hrs = len(idx_count)*DT
     else:
         hrs = 0.0
 
@@ -157,7 +174,7 @@ def el_vs_time(ra_t, dec_t, day):
     tuple
         (t_utc, el, sunrise_list, sunset_list) where:
         - t_utc : astropy.time.Time array
-            Times at which elevation is computed (5+ days, 30-min intervals).
+            Times at which elevation is computed (5+ days, DT-min intervals).
         - el : np.ndarray
             Elevation angles (degrees) corresponding to t_utc times.
         - sunrise_list : list
@@ -167,23 +184,19 @@ def el_vs_time(ra_t, dec_t, day):
 
     Notes
     -----
-    - Hours observable per night is calculate here as an optional check against
-      the values from daily_observability, but is not currently used.
-    - Time sampling interval is 30 minutes
+    - Time sampling interval is DT from config.py
     - Window covers 5 days from the reference date
     - Observatory location is defined by LOC in config.py
-    - Sunrise/sunset times expand 1 day before and after the main window
     """
     ##### Constants - eventually convert to inputs ####
     Ndays = 5.0  # days
-    dt = 5.0 / 60.  # hours
 
     start_date = Time(day).iso
 
     ##### 1) Data for tracking the target #####
 
-    # Set up time array:
-    dmjd_arr = np.arange(0, Ndays+1+dt/24., dt/24.)
+    # Set up time array (expand 1 day beyond range):
+    dmjd_arr = np.arange(0, Ndays+1+DT/24., DT/24.)*u.day
     t_utc = Time(start_date, format="iso", scale="utc") + dmjd_arr
 
     # Get alt/az coords of target vs time:
@@ -196,9 +209,9 @@ def el_vs_time(ra_t, dec_t, day):
 
     ##### 2) Data for tracking sunrise/sunset #####
     
-    # Set up array of days (expand 1 day beyond range in both directions):
-    days_mjd = np.arange(-1.0, Ndays+1.0, 1.0)
-    days_utc = Time(start_date, format="iso", scale="utc") + days_mjd
+    # Set up array of days (expand 1 day beyond range):
+    days_mjd = np.arange(0, Ndays+1.0, 1.0)
+    days_utc = Time(start_date, format="iso", scale="utc") + days_mjd*u.day
 
     # Set up observer object and populate:
     obs = ephem.Observer()
@@ -209,30 +222,11 @@ def el_vs_time(ra_t, dec_t, day):
     # Loop through days to get sunrise and sunset times:
     sunrise_list = []
     sunset_list  = []
-    hrs   = []
-    #data['days_utc'] = days_utc[1:-1]
 
-    # Loop to record sunrises and sunsets:
     for i in range(0,len(days_utc)):
 
-        obs.date = str(days_utc[i])
-        sunrise = obs.next_rising(ephem.Sun()).datetime()
+        sunset, sunrise = _get_sunrise_sunset(obs, days_utc[i])
         sunrise_list.append(sunrise)
-
-        obs.date = str(days_utc[i])
-        sunset = obs.next_setting(ephem.Sun()).datetime()
         sunset_list.append(sunset)
 
-    # Loop to count hours of night-time:
-    for i in range(1,len(days_utc)-1):
-        idx_count = np.where((Time(t_utc).mjd>Time(sunset_list[i]).mjd) & 
-                             (Time(t_utc).mjd<Time(sunrise_list[i+1]).mjd) & 
-                             (el>15))[0]
-        if len(idx_count) > 0:
-            hrs.append((Time(t_utc[idx_count[-1]]).mjd - Time(t_utc[idx_count[0]]).mjd)*24.)
-        else:
-            hrs.append(0.0)
-
-    #print(hrs)
-    
     return t_utc, el, sunrise_list, sunset_list

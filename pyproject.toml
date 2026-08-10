@@ -21,6 +21,7 @@ dependencies = [
     "requests>=2.25",
     "rubin-scheduler>=1.0",
     "psutil>=5.8",
+    "pytest>=9.1",
 ]
 
 [project.optional-dependencies]
