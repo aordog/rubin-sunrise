@@ -47,6 +47,8 @@ from rubin_sunrise.displays import (
 )
 from rubin_sunrise.lsst import rsv_service, sim_service
 
+from rubin_sunrise.monitoring import log_table_size
+
 if TYPE_CHECKING:
     from rubin_sunrise.state import SharedState
 
@@ -83,6 +85,8 @@ def data_loop(
     camera,
     user_id: int,
     flags_present: bool = False,
+    log_dir=None,
+    timestamp=None,
 ) -> None:
     """Iterate over simulated dates, updating database and state.
 
@@ -219,6 +223,8 @@ def data_loop(
             print(f"Updated data for {date}")
             print("============================")
 
+        if log_dir is not None and timestamp is not None:
+            log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"))
         _reclaim_memory()
         time.sleep(REFRESH_INTERVAL)
         print(f"[CYCLE END #{cycle_number}]")
