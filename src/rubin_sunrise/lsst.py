@@ -59,8 +59,8 @@ def _target_visits_idxs(ra_t: float,
 
     """
     dist = np.sqrt(
-        (ra_t - ra) ** 2 +
-        ((dec_t - dec) * np.cos(dec_t * np.pi / 180.)) ** 2
+        ((ra_t - ra) * np.cos(dec_t * np.pi / 180.))** 2 +
+        (dec_t - dec ) ** 2
     )
     return np.array(
         np.where((dist < r_ang) & (status == 'Performed'))[0]

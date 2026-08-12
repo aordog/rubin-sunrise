@@ -39,3 +39,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rubin_sunrise"]      
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests requiring external services (deselect with '-m \"not integration\"')",
+]

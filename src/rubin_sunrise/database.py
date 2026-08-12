@@ -111,7 +111,6 @@ def _read_csv_file(file_in, declim):
     print(' ')
 
     if OBS_FLAGS:
-        print('Reading user-defined observability flags')
         all_flags = _get_obs_flags(df)
         for date in all_flags:
             all_flags[date] = all_flags[date][dec_in < declim]
@@ -122,6 +121,7 @@ def _read_csv_file(file_in, declim):
 
 def _get_obs_flags(df):
 
+    print('Reading user-defined observability flags')
     all_flags = {}
 
     for header in list(df):
@@ -479,7 +479,8 @@ def _compute_visits(ra_mem, dec_mem, ra_grid, dec_grid, mask):
 
     visits_counts = {}
 
-    dist = np.sqrt((ra_mem-ra_grid)**2 + ((dec_mem-dec_grid)*np.cos(dec_mem*np.pi/180.))**2)
+    dist = np.sqrt(((ra_mem-ra_grid) * np.cos(dec_mem*np.pi/180.))**2 + 
+                   (dec_mem-dec_grid)**2)
     idx = dist.argmin()
 
     for listname, maskname in zip(VISIT_COLS, MASK_COLS):
