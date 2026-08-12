@@ -136,7 +136,8 @@ def main() -> None:
 
     data_thread = threading.Thread(
         target=data_loop,
-        args=(shared_state, conn, cur, camera, DEFAULT_USER_ID, flags_present),
+        args=(shared_state, conn, cur, camera, DEFAULT_USER_ID, flags_present,
+              run_dir, timestamp),
         daemon=True,
     )
     data_thread.start()

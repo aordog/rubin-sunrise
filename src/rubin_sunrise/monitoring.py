@@ -30,7 +30,7 @@ import os, psutil
 import numpy as np
 import pandas as pd
 
-from rubin_sunrise.config import PORT, STRESS_TEST_CLICK_INTERVAL
+from rubin_sunrise.config import PORT, STRESS_TEST_CLICK_INTERVAL, DB_NAME
 
 if TYPE_CHECKING:
     from rubin_sunrise.state import SharedState
@@ -342,6 +342,32 @@ def monitor_resources(log_path, interval=5, stop_event=None):
             f.write(f"{ts},{cpu:.1f},{mem:.1f}\n")
             f.flush()
 
+def log_table_size(cur, log_path):
+    """Log total database size in bytes with timestamp.
+
+    Records the total on-disk size in bytes of the lsst_database along with 
+    the current timestamp. Designed to be called once per iteration of the 
+    main data loop in pipeline.py.
+
+    Parameters
+    ----------
+    cur : psycopg2.cursor
+        Database cursor for executing size query.
+    log_path : str
+        Path to output CSV file for table size data.
+    """
+    file_exists = os.path.isfile(log_path)
+
+    cur.execute("SELECT pg_database_size(%s)", (DB_NAME,))
+    total_size = cur.fetchone()[0]
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    with open(log_path, "a") as f:
+        if not file_exists:
+            f.write("timestamp,total_size_bytes\n")
+        f.write(f"{ts},{total_size}\n")
+        f.flush()
+
 def stress_test(shared_state: "SharedState", cur) -> None:
     """Perform automated dashboard interactions for backend performance 
     testing.
@@ -425,47 +451,56 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
     """
     time_support()
 
-    data = pd.read_csv(f"{dir_files}/resources_{file_time}.csv")
+    data  = pd.read_csv(f"{dir_files}/resources_{file_time}.csv")
+    data2 = pd.read_csv(f"{dir_files}/table_size_{file_time}.csv")
 
     timestamp   = Time(data['timestamp'].tolist())
     cpu_percent = np.array(data['cpu_percent'])
     memory_mb   = np.array(data['memory_mb'])
+    timestamp2  = Time(data2['timestamp'].tolist())
+    filesize    = np.array(data2['total_size_bytes'])/1e6 # MB
 
     ts_update  = _read_log(dir_files, file_time, "Updated data for")
     ts_maptype = _read_log(dir_files, file_time, "Map type")
     ts_rowpick = _read_log(dir_files, file_time, "Row")
 
-    fig, ax = plt.subplots(1,1, figsize=(10,5))
-    ax.plot(timestamp, memory_mb, color='k', label='memory')
+    fig, ax = plt.subplots(3,1, figsize=(10,8))
+    plt.subplots_adjust(left=0.1,right=0.95,top=0.95,bottom=0.1,hspace=0.15)
+
+    ax[0].plot(timestamp, memory_mb, color='k',linewidth=1)
+    ax[0].set_ylim(0,ymax_mb)
+    ax[0].set_ylabel('Memory (MB)')
+
+    ax[1].plot(timestamp, cpu_percent, color='k',linewidth=1)
+    ax[1].set_ylim(0,100)
+    ax[1].set_ylabel('CPU (%)')
+
+    ax[2].plot(timestamp2, filesize, color='k',linewidth=1)
+    ax[2].set_ylim(0,)
+    ax[2].set_ylabel('Table size (MB)')
 
     colors = ['grey', 'blue', 'green']
     labels = ['update', 'toggle map', 'click row']
     linestyles = ['dashed', 'dashed', 'dotted']
     ts = [ts_update, ts_maptype, ts_rowpick]
-    for j in range(0,3):
-        for i in range(0,len(ts[j])):
-            if i == 0:
-                ax.plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
-                    linewidth=0.5, color=colors[j], label=labels[j])
-            else:
-                ax.plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
-                        linewidth=0.5, color=colors[j])
+    for k in [0,1]:
+        for j in range(0,3):
+            for i in range(0,len(ts[j])):
+                if i == 0:
+                    ax[k].plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
+                        linewidth=0.5, color=colors[j], label=labels[j])
+                else:
+                    ax[k].plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
+                            linewidth=0.5, color=colors[j])
 
-    ax2 = ax.twinx()
-    ax2.plot(timestamp, cpu_percent, color='purple', label='CPU')
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    for k in range(0,3):
+        ax[k].set_xlim(timestamp[0],timestamp[-1])
+        ax[k].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        if k < 1:
+            ax[k].legend(framealpha=1, loc='lower left')
+    ax[2].set_xlabel('Time')
 
-    ax.set_ylim(0,ymax_mb)
-    ax2.set_ylim(0,130)
-
-    ax.set_xlim(timestamp[0],timestamp[-1])
-
-    ax.legend(framealpha=1, loc='upper left')
-    ax2.legend(framealpha=1, loc='upper right')
-
-    ax.set_xlabel('Time')
-    ax.set_ylabel('Memory (MB)')
-    ax2.set_ylabel('CPU (%)')
+    ax[0].set_title(f'{len(timestamp2)} simulated days', fontsize=18)
 
     plt.savefig(f"{dir_files}/{file_time}.pdf")
     plt.savefig(f"{dir_files}/{file_time}.png")
