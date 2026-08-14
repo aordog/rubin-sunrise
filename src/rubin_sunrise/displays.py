@@ -288,12 +288,19 @@ def _make_html_visits_map(data, idx_mem, maptype):
                                                 color='lightgreen',
                                                 symbol='circle')
                                     ),row=row, col=col)    
+
+            RA_min  = data['ra_mem'][idx_mem] - 1.5/np.cos(data['dec_mem'][idx_mem]*np.pi/180)#np.nanmin(data['ra_grid'])
+            RA_max  = data['ra_mem'][idx_mem] + 1.5/np.cos(data['dec_mem'][idx_mem]*np.pi/180)#np.nanmax(data['ra_grid'])
+            dec_min = data['dec_mem'][idx_mem] - 1.5#np.nanmin(data['dec_grid'])
+            dec_max = data['dec_mem'][idx_mem] + 1.5#np.nanmax(data['dec_grid'])
+
+            scaleratio = (RA_max-RA_min) / (dec_max-dec_min)
                 
-            fig.update_xaxes(range=[data['ra_gr']+2.5, data['ra_gr']-2.5], constrain='domain', 
-                            row=row, col=col)
-            fig.update_yaxes(range=[data['dec_gr']-2.5, data['dec_gr']+2.5], constrain='domain', 
+            fig.update_xaxes(range=[RA_max, RA_min], constrain='domain', 
+                             row=row, col=col)
+            fig.update_yaxes(range=[dec_min, dec_max], constrain='domain', 
                             scaleanchor=f"x{col + (row-1)*3}", 
-                            scaleratio=1, row=row, col=col)
+                            scaleratio=scaleratio, row=row, col=col)
             fig.for_each_annotation(lambda a: a.update(font_size=16, y=a.y+0.001))
 
     fig.update_xaxes(showline=True, linewidth=1, linecolor='white', mirror=True,

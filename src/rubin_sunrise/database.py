@@ -178,6 +178,9 @@ def _group_targets(ra_list, dec_list, nside):
 
     pixel_ids = hp.ang2pix(nside, ra_list, dec_list, lonlat=True)
     idx_filled = np.unique(pixel_ids)
+    pixel_res = hp.nside2resol(nside)
+    print('*********************')
+    print(pixel_res*180/np.pi)
 
     groups = []
     for idx in idx_filled:
@@ -261,16 +264,23 @@ def _add_mask_grid(pointing_ra, pointing_dec):
         (ra_grid, dec_grid) - Flattened arrays of grid coordinates.
     """
 
-    samp = 1.0/60 # 2 arcmin grid
-    radius = 2.5 # should work well for nside=16 grouping
+    samp = 1.0/60 # 1 arcmin grid
+    radius = hp.nside2resol(32)*(180/np.pi)+1.0# should work well for nside=16 grouping
 
-    ra_grid = np.arange(pointing_ra - radius*np.cos(np.radians(pointing_dec)), 
-                   pointing_ra + radius, 
-                   samp * np.cos(np.radians(pointing_dec)))
-    
-    dec_grid = np.arange(pointing_dec - radius*np.cos(np.radians(pointing_dec)), 
-                    pointing_dec + radius, 
-                    samp)
+    RAcor = np.cos(np.radians(pointing_dec)) 
+    radius_cor = radius/RAcor
+    samp_cor   = samp/RAcor
+
+    if radius_cor > 180.:
+        radius_cor = 180.0
+        samp_cor = 180.*samp/radius
+
+    ra_grid  = np.arange(pointing_ra-radius_cor, 
+                         pointing_ra+radius_cor + samp_cor/2, 
+                         samp_cor)
+    dec_grid = np.arange(pointing_dec-radius, 
+                         pointing_dec+radius + samp/2, 
+                         samp)
     
     ra_grid, dec_grid = np.meshgrid(ra_grid, dec_grid)
     ra_grid  = ra_grid.flatten()
@@ -673,7 +683,7 @@ def initialize_tracking(user_id, file_in, declim):
     print('')
 
     # Group the targets from the list
-    list_grouped = _group_targets(ra_t_list, dec_t_list, 16)
+    list_grouped = _group_targets(ra_t_list, dec_t_list, 32)
 
     # Open a connection to database
     conn = psycopg2.connect(dbname="lsst_database")
