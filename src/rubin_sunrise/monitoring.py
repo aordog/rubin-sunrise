@@ -468,7 +468,7 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
     plt.subplots_adjust(left=0.1,right=0.95,top=0.95,bottom=0.1,hspace=0.15)
 
     ax[0].plot(timestamp, memory_mb, color='k',linewidth=1)
-    ax[0].set_ylim(0,ymax_mb)
+    ax[0].set_ylim(0,)
     ax[0].set_ylabel('Memory (MB)')
 
     ax[1].plot(timestamp, cpu_percent, color='k',linewidth=1)
