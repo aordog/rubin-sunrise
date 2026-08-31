@@ -7,7 +7,7 @@ for these when that feature is fixed.
 import pytest
 import numpy as np
 import pandas as pd
-import rubin_sunrise.database as database
+import rubin_sunrise.collector.database as database
 import tempfile
 import os
 from unittest.mock import Mock, call

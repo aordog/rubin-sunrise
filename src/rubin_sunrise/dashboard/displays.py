@@ -405,6 +405,9 @@ def _make_html_visits_plot(data, idx_mem, maptype):
     """
     fig = make_subplots(rows=1, cols=1,specs=[[{"type": "scatter"}]])
     title = f"<b>RA = {data['ra_mem'][idx_mem]:.5f}&deg;, dec = {data['dec_mem'][idx_mem]:.5f}&deg;</b>"
+    #print('++++++++++++++++++++++++++++')
+    #print(title)
+    #print('++++++++++++++++++++++++++++')
     fig.update_layout(title=dict(text=title, x=0.5, xanchor="center"))
 
     # Get colors from seaborn's colorblind palette with specific indices for better distinction

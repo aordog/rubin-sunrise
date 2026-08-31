@@ -24,12 +24,12 @@ from psycopg2 import extras
 from datetime import timedelta, datetime
 from dateutil.parser import parse
 import csv
-from rubin_sunrise.utils import (
+from rubin_sunrise.collector.utils import (
     simulation_dates, 
     get_base_mjd,
     date_to_nightnum,
 )
-from rubin_sunrise.lsst import (
+from rubin_sunrise.collector.lsst import (
     get_camera, 
     get_visit_metadata,
     rsv_service,
@@ -149,7 +149,6 @@ def _is_valid_date(s):
     # year, month, and day must be unaffected by the default -> they were
     # actually present in the string.
     return (d1.year, d1.month, d1.day) == (d2.year, d2.month, d2.day)
-
 
 def _group_targets(ra_list, dec_list, nside):
     """Group targets spatially using HEALPix grid.
@@ -288,45 +287,6 @@ def _add_mask_grid(pointing_ra, pointing_dec):
 
     return ra_grid, dec_grid
 
-def _compute_daily_masks(visits_use, camera, ra_grid, dec_grid):
-    """Compute visit masks for all bands/filters on the spatial grid.
-
-    For each band, counts how many visits from the latest observations 
-    occurred at each grid point using the LSST camera footprint.
-
-    Parameters
-    ----------
-    visits_use : dict
-        Visit data with keys: 'ra', 'dec', 'band', 'rot'
-    camera : rubin_scheduler.utils.LsstCameraFootprint
-        Camera footprint object for mask calculations.
-    ra_grid : np.ndarray
-        RA coordinates of grid points (degrees).
-    dec_grid : np.ndarray
-        Dec coordinates of grid points (degrees).
-
-    Returns
-    -------
-    dict
-        Keys are mask column names; values are visit count arrays.
-    """
-
-    latest = {}
-
-    for band, mask_name in zip(BANDS, MASK_COLS):
-
-        latest[mask_name] = np.zeros(len(ra_grid))
-
-        idxs = np.where(np.array(visits_use['band']) == band)[0]
-        for i in idxs:
-           idx_visit = camera(ra_grid, dec_grid, 
-                              visits_use['ra'][i], 
-                              visits_use['dec'][i], 
-                              visits_use['rot'][i])
-           latest[mask_name][idx_visit] = latest[mask_name][idx_visit] + 1
-
-    return latest
-
 def _insert_daily_visits(cur, date, member_id, v):
     """Insert daily visit counts for a member into the database.
 
@@ -415,53 +375,6 @@ def _upsert_masks(cur, gid, mask_type, masks):
     """, (gid, mask_type,
           *[psycopg2.Binary(masks[col].astype(np.int16).tobytes()) for col in MASK_COLS]))
 
-def _insert_observability(cur, date, member_id, hrs):
-    """
-    Parameters
-    ----------
-    cur : psycopg2.cursor
-        Database cursor for executing the insert.
-    date : str
-        Date string (YYYY-MM-DD) for the observations.
-    member_id : int
-        Database ID of the target member.
-    hrs : dict
-        Observable hours.
-    """
-
-    # Convert numpy types to native Python types for database compatibility
-    member_id_value = int(member_id) if isinstance(member_id, (np.integer, np.int64)) else member_id
-    hrs_value = float(hrs) if isinstance(hrs, (np.floating, np.integer)) else hrs
-
-    cur.execute(f"""
-        INSERT INTO member_observability
-               (time, member_id, hrs_obs)
-        VALUES (%s, %s, %s)
-    """, (date, member_id_value, hrs_value))
-
-def _insert_obs_flags(cur, date, member_id, flag):
-    """
-    Parameters
-    ----------
-    cur : psycopg2.cursor
-        Database cursor for executing the insert.
-    date : str
-        Date string (YYYY-MM-DD) for the observations.
-    member_id : int
-        Database ID of the target member.
-    """
-
-    # Convert numpy types to native Python types for database compatibility
-    member_id_value = int(member_id) if isinstance(member_id, (np.integer, np.int64)) else member_id
-    #hrs_value = float(hrs) if isinstance(hrs, (np.floating, np.integer)) else hrs
-    flag_values = int(flag)
-
-    cur.execute(f"""
-        INSERT INTO member_obs_flags
-               (time, member_id, obs_flag)
-        VALUES (%s, %s, %s)
-    """, (date, member_id_value, flag_values))
-
 def _compute_visits(ra_mem, dec_mem, ra_grid, dec_grid, mask):
     """Count visits for a group member target from a mask grid.
 
@@ -497,6 +410,83 @@ def _compute_visits(ra_mem, dec_mem, ra_grid, dec_grid, mask):
         visits_counts[listname] = float(mask[maskname][idx])
 
     return visits_counts
+
+def _read_grid_and_mask(gid, cur):
+    """Load spatial grid and masks for a group from database.
+
+    Retrieves the pre-computed spatial grid for a group and loads the
+    existing cumulative mask (or None if first observation).
+
+    Parameters
+    ----------
+    gid : int
+        Group ID to load data for.
+    cur : psycopg2.cursor (DictCursor)
+        Database cursor for queries.
+
+    Returns
+    -------
+    tuple
+        (ra_grid, dec_grid, mask_row) where grid arrays are 1D numpy
+        arrays and mask_row is a cursor row or None.
+    """
+
+    # Load grids needed for making the mask:
+    cur.execute(
+            "SELECT ra_gr, dec_gr, ra_grid, dec_grid FROM groups WHERE group_id = %s",
+            (gid,))
+    grp = cur.fetchone()
+    ra_grid  = np.frombuffer(grp['ra_grid'])
+    dec_grid = np.frombuffer(grp['dec_grid'])
+
+    # Load existing total masks (zeros on first day):
+    cols = ', '.join(MASK_COLS)
+    cur.execute(f"""
+                SELECT {cols}
+                FROM group_masks WHERE group_id = %s AND mask_type = 'total'
+                """, (gid,))
+    mask_row = cur.fetchone()
+
+    return ra_grid, dec_grid, mask_row
+
+def _compute_daily_masks(visits_use, camera, ra_grid, dec_grid):
+    """Compute visit masks for all bands/filters on the spatial grid.
+
+    For each band, counts how many visits from the latest observations 
+    occurred at each grid point using the LSST camera footprint.
+
+    Parameters
+    ----------
+    visits_use : dict
+        Visit data with keys: 'ra', 'dec', 'band', 'rot'
+    camera : rubin_scheduler.utils.LsstCameraFootprint
+        Camera footprint object for mask calculations.
+    ra_grid : np.ndarray
+        RA coordinates of grid points (degrees).
+    dec_grid : np.ndarray
+        Dec coordinates of grid points (degrees).
+
+    Returns
+    -------
+    dict
+        Keys are mask column names; values are visit count arrays.
+    """
+
+    latest = {}
+
+    for band, mask_name in zip(BANDS, MASK_COLS):
+
+        latest[mask_name] = np.zeros(len(ra_grid))
+
+        idxs = np.where(np.array(visits_use['band']) == band)[0]
+        for i in idxs:
+           idx_visit = camera(ra_grid, dec_grid, 
+                              visits_use['ra'][i], 
+                              visits_use['dec'][i], 
+                              visits_use['rot'][i])
+           latest[mask_name][idx_visit] = latest[mask_name][idx_visit] + 1
+
+    return latest
 
 def _process_group(gid, date, visits, camera, conn, cur):
     """Process one group: compute masks and update database.
@@ -571,43 +561,52 @@ def _process_group(gid, date, visits, camera, conn, cur):
     
     return
 
-def _read_grid_and_mask(gid, cur):
-    """Load spatial grid and masks for a group from database.
-
-    Retrieves the pre-computed spatial grid for a group and loads the
-    existing cumulative mask (or None if first observation).
-
+def _insert_obs_flags(cur, date, member_id, flag):
+    """
     Parameters
     ----------
-    gid : int
-        Group ID to load data for.
-    cur : psycopg2.cursor (DictCursor)
-        Database cursor for queries.
-
-    Returns
-    -------
-    tuple
-        (ra_grid, dec_grid, mask_row) where grid arrays are 1D numpy
-        arrays and mask_row is a cursor row or None.
+    cur : psycopg2.cursor
+        Database cursor for executing the insert.
+    date : str
+        Date string (YYYY-MM-DD) for the observations.
+    member_id : int
+        Database ID of the target member.
     """
 
-    # Load grids needed for making the mask:
-    cur.execute(
-            "SELECT ra_gr, dec_gr, ra_grid, dec_grid FROM groups WHERE group_id = %s",
-            (gid,))
-    grp = cur.fetchone()
-    ra_grid  = np.frombuffer(grp['ra_grid'])
-    dec_grid = np.frombuffer(grp['dec_grid'])
+    # Convert numpy types to native Python types for database compatibility
+    member_id_value = int(member_id) if isinstance(member_id, (np.integer, np.int64)) else member_id
+    #hrs_value = float(hrs) if isinstance(hrs, (np.floating, np.integer)) else hrs
+    flag_values = int(flag)
 
-    # Load existing total masks (zeros on first day):
-    cols = ', '.join(MASK_COLS)
     cur.execute(f"""
-                SELECT {cols}
-                FROM group_masks WHERE group_id = %s AND mask_type = 'total'
-                """, (gid,))
-    mask_row = cur.fetchone()
+        INSERT INTO member_obs_flags
+               (time, member_id, obs_flag)
+        VALUES (%s, %s, %s)
+    """, (date, member_id_value, flag_values))
 
-    return ra_grid, dec_grid, mask_row
+def _insert_observability(cur, date, member_id, hrs):
+    """
+    Parameters
+    ----------
+    cur : psycopg2.cursor
+        Database cursor for executing the insert.
+    date : str
+        Date string (YYYY-MM-DD) for the observations.
+    member_id : int
+        Database ID of the target member.
+    hrs : dict
+        Observable hours.
+    """
+
+    # Convert numpy types to native Python types for database compatibility
+    member_id_value = int(member_id) if isinstance(member_id, (np.integer, np.int64)) else member_id
+    hrs_value = float(hrs) if isinstance(hrs, (np.floating, np.integer)) else hrs
+
+    cur.execute(f"""
+        INSERT INTO member_observability
+               (time, member_id, hrs_obs)
+        VALUES (%s, %s, %s)
+    """, (date, member_id_value, hrs_value))
 
 
 def set_up_db():
@@ -747,6 +746,157 @@ def initialize_forecast(conn, cur, user_id):
 
     return
 
+def populate_database(conn, cur, camera, user_id, visits, date, shared_state=None):
+    """Process and store visits/mask data for all target groups.
+
+    Iterates through all target groups for a user and computes 2D visit
+    masks based on observation visit data using _process_group().
+    Updates both daily and cumulative masks in the user-specific database,
+    and updates shared state for progress reporting to the web interface.
+
+    This function is called once per date during both initial history 
+    population and daily refresh cycles.
+
+    Parameters
+    ----------
+    conn : psycopg2.connection
+        Database connection for reading and writing data.
+    cur : psycopg2.cursor (DictCursor)
+        Database cursor for queries.
+    camera : rubin_scheduler.utils.LsstCameraFootprint
+        Rubin LSST camera footprint object for computing visit masks.
+    user_id : int
+        User ID identifying which groups to process.
+    visits : pandas.DataFrame
+        Visit schedule data containing columns: s_ra, s_dec,
+        execution_status, obs_id. Can originate from either sim_service(),
+        rsv_service(), or sim_service_range().
+    date : str
+        Date string (YYYY-MM-DD) for which to process data.
+    shared_state : SharedState, optional
+        Thread-safe container for dashboard state. Progress updates are
+        written atomically via the write() method.
+
+    Notes
+    -----
+    - Designed to run in a background thread
+    - Updates progress and progress_msg in shared state atomically
+    - Processes groups in database order (by group_id)
+    - Each group processes its member targets and computes masks
+    """
+
+    print('+++++++++++++++++++++++++++++')
+    print('USING THE NEW DATABASE MODULE!')
+    print('+++++++++++++++++++++++++++++')
+
+    # Access the groups table, specifying ordering by group_id:
+    cur.execute("SELECT group_id, ra_gr, dec_gr FROM groups WHERE user_id = %s ORDER BY group_id",
+        (user_id,))
+    rows = cur.fetchall()
+    n_groups = len(rows)
+
+    # Loop through all groups:
+    for i, row in enumerate(rows):
+
+        # Get the Rubin LSST visits for the group pointings:
+        visits_use = get_visit_metadata(visits, row['ra_gr'], row['dec_gr'])
+
+        # Calculate the masks and visits at each target:
+        _process_group(row['group_id'], date, visits_use, camera, conn, cur)
+
+        if shared_state is not None:
+            shared_state.write(
+                progress=(i + 1) / n_groups,
+                progress_msg=f"UPDATING... processing group {i+1}/{n_groups}",
+        )
+
+    return
+
+def populate_obs_flags(conn, cur, user_id, date, flags):
+    """Populate user observability .
+
+    Parameters
+    ----------
+    conn : psycopg2.connection
+        Database connection for transaction management.
+    cur : psycopg2.cursor (DictCursor)
+        Database cursor for query execution.
+    user_id : int
+        User ID identifying which targets to process.
+    date : str
+        Date string (YYYY-MM-DD) for observability calculation.
+    """
+
+    print(f'Populating user-defined observability for {date}')
+
+    # Query all members for this user directly, joining with groups table
+    # to filter by user_id:
+    cur.execute("""
+        SELECT m.member_id, m.ra_mem, m.dec_mem FROM members m
+        JOIN groups g ON m.group_id = g.group_id
+        WHERE g.user_id = %s
+        ORDER BY m.group_id, m.member_idx
+        """, (user_id,))
+    
+    # Process each member:
+    members  = cur.fetchall()
+    mem_ids  = np.array([mem['member_id'] for mem in members])
+
+
+    for i in range(0,len(mem_ids)):
+        _insert_obs_flags(cur, date, mem_ids[i], flags[i])
+
+    conn.commit()
+
+    return
+
+def populate_forecast(conn, cur, user_id, date, shared_state=None):
+    """Populate observability forecast data for all targets.
+
+    Computes and stores daily observability hours for all member targets
+    for a given date using vectorized azimuth/elevation calculations.
+    Inserts results into member_observability table and commits the transaction.
+
+    Parameters
+    ----------
+    conn : psycopg2.connection
+        Database connection for transaction management.
+    cur : psycopg2.cursor (DictCursor)
+        Database cursor for query execution.
+    user_id : int
+        User ID identifying which targets to process.
+    date : str
+        Date string (YYYY-MM-DD) for observability calculation.
+    shared_state : SharedState, optional
+        Thread-safe state container (not currently used).
+    """
+
+    print(f'Populating observability for {date}')
+
+    # Query all members for this user directly, joining with groups table
+    # to filter by user_id:
+    cur.execute("""
+        SELECT m.member_id, m.ra_mem, m.dec_mem FROM members m
+        JOIN groups g ON m.group_id = g.group_id
+        WHERE g.user_id = %s
+        ORDER BY m.group_id, m.member_idx
+        """, (user_id,))
+    
+    # Process each member:
+    members  = cur.fetchall()
+    mem_ids  = np.array([mem['member_id'] for mem in members])
+    ra_mems  = np.array([mem['ra_mem'] for mem in members])
+    dec_mems = np.array([mem['dec_mem'] for mem in members])
+
+    az, el, t_utc = get_az_el(ra_mems, dec_mems, date)
+
+    for i in range(0,len(mem_ids)):
+        hrs = daily_observability(el[i], date, t_utc)
+        _insert_observability(cur, date, mem_ids[i], hrs)
+
+    conn.commit()
+    return
+
 def populate_history(conn, cur, camera, user_id):
     """Populate database with historical observation data.
 
@@ -814,152 +964,5 @@ def populate_history(conn, cur, camera, user_id):
             print(f"DATA MISSING for {date}")
         else:
             populate_database(conn, cur, camera, user_id, visits, date)
-
-    return
-
-def populate_forecast(conn, cur, user_id, date, shared_state=None):
-    """Populate observability forecast data for all targets.
-
-    Computes and stores daily observability hours for all member targets
-    for a given date using vectorized azimuth/elevation calculations.
-    Inserts results into member_observability table and commits the transaction.
-
-    Parameters
-    ----------
-    conn : psycopg2.connection
-        Database connection for transaction management.
-    cur : psycopg2.cursor (DictCursor)
-        Database cursor for query execution.
-    user_id : int
-        User ID identifying which targets to process.
-    date : str
-        Date string (YYYY-MM-DD) for observability calculation.
-    shared_state : SharedState, optional
-        Thread-safe state container (not currently used).
-    """
-
-    print(f'Populating observability for {date}')
-
-    # Query all members for this user directly, joining with groups table
-    # to filter by user_id:
-    cur.execute("""
-        SELECT m.member_id, m.ra_mem, m.dec_mem FROM members m
-        JOIN groups g ON m.group_id = g.group_id
-        WHERE g.user_id = %s
-        ORDER BY m.group_id, m.member_idx
-        """, (user_id,))
-    
-    # Process each member:
-    members  = cur.fetchall()
-    mem_ids  = np.array([mem['member_id'] for mem in members])
-    ra_mems  = np.array([mem['ra_mem'] for mem in members])
-    dec_mems = np.array([mem['dec_mem'] for mem in members])
-
-    az, el, t_utc = get_az_el(ra_mems, dec_mems, date)
-
-    for i in range(0,len(mem_ids)):
-        hrs = daily_observability(el[i], date, t_utc)
-        _insert_observability(cur, date, mem_ids[i], hrs)
-
-    conn.commit()
-    return
-
-def populate_database(conn, cur, camera, user_id, visits, date, shared_state=None):
-    """Process and store visits/mask data for all target groups.
-
-    Iterates through all target groups for a user and computes 2D visit
-    masks based on observation visit data using _process_group().
-    Updates both daily and cumulative masks in the user-specific database,
-    and updates shared state for progress reporting to the web interface.
-
-    This function is called once per date during both initial history 
-    population and daily refresh cycles.
-
-    Parameters
-    ----------
-    conn : psycopg2.connection
-        Database connection for reading and writing data.
-    cur : psycopg2.cursor (DictCursor)
-        Database cursor for queries.
-    camera : rubin_scheduler.utils.LsstCameraFootprint
-        Rubin LSST camera footprint object for computing visit masks.
-    user_id : int
-        User ID identifying which groups to process.
-    visits : pandas.DataFrame
-        Visit schedule data containing columns: s_ra, s_dec,
-        execution_status, obs_id. Can originate from either sim_service(),
-        rsv_service(), or sim_service_range().
-    date : str
-        Date string (YYYY-MM-DD) for which to process data.
-    shared_state : SharedState, optional
-        Thread-safe container for dashboard state. Progress updates are
-        written atomically via the write() method.
-
-    Notes
-    -----
-    - Designed to run in a background thread
-    - Updates progress and progress_msg in shared state atomically
-    - Processes groups in database order (by group_id)
-    - Each group processes its member targets and computes masks
-    """
-
-    # Access the groups table, specifying ordering by group_id:
-    cur.execute("SELECT group_id, ra_gr, dec_gr FROM groups WHERE user_id = %s ORDER BY group_id",
-        (user_id,))
-    rows = cur.fetchall()
-    n_groups = len(rows)
-
-    # Loop through all groups:
-    for i, row in enumerate(rows):
-
-        # Get the Rubin LSST visits for the group pointings:
-        visits_use = get_visit_metadata(visits, row['ra_gr'], row['dec_gr'])
-
-        # Calculate the masks and visits at each target:
-        _process_group(row['group_id'], date, visits_use, camera, conn, cur)
-
-        if shared_state is not None:
-            shared_state.write(
-                progress=(i + 1) / n_groups,
-                progress_msg=f"UPDATING... processing group {i+1}/{n_groups}",
-        )
-
-    return
-
-def populate_obs_flags(conn, cur, user_id, date, flags):
-    """Populate user observability .
-
-    Parameters
-    ----------
-    conn : psycopg2.connection
-        Database connection for transaction management.
-    cur : psycopg2.cursor (DictCursor)
-        Database cursor for query execution.
-    user_id : int
-        User ID identifying which targets to process.
-    date : str
-        Date string (YYYY-MM-DD) for observability calculation.
-    """
-
-    print(f'Populating user-defined observability for {date}')
-
-    # Query all members for this user directly, joining with groups table
-    # to filter by user_id:
-    cur.execute("""
-        SELECT m.member_id, m.ra_mem, m.dec_mem FROM members m
-        JOIN groups g ON m.group_id = g.group_id
-        WHERE g.user_id = %s
-        ORDER BY m.group_id, m.member_idx
-        """, (user_id,))
-    
-    # Process each member:
-    members  = cur.fetchall()
-    mem_ids  = np.array([mem['member_id'] for mem in members])
-
-
-    for i in range(0,len(mem_ids)):
-        _insert_obs_flags(cur, date, mem_ids[i], flags[i])
-
-    conn.commit()
 
     return

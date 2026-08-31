@@ -32,8 +32,9 @@ import pandas as pd
 
 from rubin_sunrise.config import PORT, STRESS_TEST_CLICK_INTERVAL, DB_NAME
 
-if TYPE_CHECKING:
-    from rubin_sunrise.state import SharedState
+## Commenting this out for now - will re-implment if 'stress_test' needed:
+#if TYPE_CHECKING:
+#    from rubin_sunrise.state import SharedState
 
 
 def _fetch_valid_rows(cur) -> list[dict]:
@@ -368,6 +369,7 @@ def log_table_size(cur, log_path):
         f.write(f"{ts},{total_size}\n")
         f.flush()
 
+'''
 def stress_test(shared_state: "SharedState", cur) -> None:
     """Perform automated dashboard interactions for backend performance 
     testing.
@@ -432,6 +434,8 @@ def stress_test(shared_state: "SharedState", cur) -> None:
             last_click_time = now
         
         time.sleep(0.1)
+'''
+        
 
 def monitoring_plots(dir_files, file_time, ymax_mb=800):
     """Generate performance monitoring plots from resource data.
