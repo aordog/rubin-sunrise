@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 import pandas as pd
-import rubin_sunrise.lsst as lsst
+import rubin_sunrise.collector.lsst as lsst
 
 @pytest.mark.parametrize(
     "ra_t, dec_t, r_ang, ra, dec, status, expected_indices",

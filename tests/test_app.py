@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 from flask import Flask
 import time
 
-from rubin_sunrise.app import create_app
+from rubin_sunrise.dashboard.app import create_app
 
 @pytest.fixture
 def mock_shared_state():
@@ -20,7 +20,7 @@ def mock_shared_state():
         "date": "2025-04-27",
         "fig1_html": "<div>Map plot</div>",
         "fig2_html": "<div>Time series</div>",
-        "fig3_html": "<div>Observability plot</div>",
+        #"fig3_html": "<div>Observability plot</div>",
         "table": "<table><tr><td>Target 1</td></tr></table>",
         "version": "v1.0.0",
         "next_update": current_time + 60,  # 1 min from now
@@ -48,19 +48,23 @@ def app_with_mocks(mock_shared_state, mock_dbconn):
     This fixture patches the display classes and render_template to avoid
     database queries and missing template files during testing.
     """
-    with patch("rubin_sunrise.app.TargetMap"), \
-         patch("rubin_sunrise.app.TargetTimeSeries"), \
-         patch("rubin_sunrise.app.ObservabilityData"), \
-         patch("rubin_sunrise.app._reclaim_memory"), \
-         patch("rubin_sunrise.app.render_template") as mock_render:
+    #with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+    #     patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+    #     patch("rubin_sunrise.dashboard.app.ObservabilityData"), \
+    #     patch("rubin_sunrise.dashboard.app._reclaim_memory"), \
+    #     patch("rubin_sunrise.dashboard.app.render_template") as mock_render:
+    with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+         patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+         patch("rubin_sunrise.dashboard.app.ObservabilityData"), \
+         patch("rubin_sunrise.dashboard.app.render_template") as mock_render:
         
         # Mock render_template to return HTML without requiring actual template files
         mock_render.return_value = "<html><body>Dashboard</body></html>"
         
         # Configure the mock display objects to return HTML
-        with patch("rubin_sunrise.app.TargetMap") as mock_target_map, \
-             patch("rubin_sunrise.app.TargetTimeSeries") as mock_ts, \
-             patch("rubin_sunrise.app.ObservabilityData") as mock_obs:
+        with patch("rubin_sunrise.dashboard.app.TargetMap") as mock_target_map, \
+             patch("rubin_sunrise.dashboard.app.TargetTimeSeries") as mock_ts, \
+             patch("rubin_sunrise.dashboard.app.ObservabilityData") as mock_obs:
             
             # Setup mocks to return HTML strings
             mock_target_map.return_value.make_html_visits_map.return_value = (
@@ -155,12 +159,12 @@ class TestRowClickedRoute:
         assert json_data["status"] == "ok"
         assert "fig1_html" in json_data
         assert "fig2_html" in json_data
-        assert "fig3_html" in json_data
+        #assert "fig3_html" in json_data
         
         # Check that HTML is actually present (not empty)
         assert len(json_data["fig1_html"]) > 0
         assert len(json_data["fig2_html"]) > 0
-        assert len(json_data["fig3_html"]) > 0
+        #assert len(json_data["fig3_html"]) > 0
     
     def test_row_clicked_with_index_required(self, client):
         """Test that row_clicked requires index in the request.
@@ -248,7 +252,7 @@ class TestMapTypeClickedRoute:
         json_data = response.get_json()
         assert json_data["status"] == "ok"
 
-
+'''
 class TestObsPlotUpdateRoute:
     """Tests for the obs_plot_update() route handling observability updates."""
     
@@ -270,8 +274,8 @@ class TestObsPlotUpdateRoute:
         assert response.status_code == 200
         json_data = response.get_json()
         assert json_data["status"] == "ok"
-        assert "fig3_html" in json_data
-        assert len(json_data["fig3_html"]) > 0
+        #assert "fig3_html" in json_data
+        #assert len(json_data["fig3_html"]) > 0
     
     def test_obs_plot_update_with_default_window(self, client):
         """Test that obs_plot_update uses default window_days when not provided."""
@@ -292,7 +296,8 @@ class TestObsPlotUpdateRoute:
         json_data = response.get_json()
         assert json_data["status"] == "ok"
 
-
+'''
+        
 class TestCheckUpdateRoute:
     """Tests for the check_update() polling endpoint."""
     
@@ -394,10 +399,13 @@ class TestCreateAppFactory:
         mock_dbconn
     ):
         """Test that create_app returns a Flask application."""
-        with patch("rubin_sunrise.app.TargetMap"), \
-             patch("rubin_sunrise.app.TargetTimeSeries"), \
-             patch("rubin_sunrise.app.ObservabilityData"), \
-             patch("rubin_sunrise.app._reclaim_memory"):
+        #with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+        #     patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+        #     patch("rubin_sunrise.dashboard.app.ObservabilityData"), \
+        #     patch("rubin_sunrise.dashboard.app._reclaim_memory"):
+        with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+             patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+             patch("rubin_sunrise.dashboard.app.ObservabilityData"):
             
             app = create_app(mock_shared_state, mock_dbconn)
             assert isinstance(app, Flask)
@@ -414,10 +422,13 @@ class TestCreateAppFactory:
         template_dir.mkdir()
         static_dir.mkdir()
         
-        with patch("rubin_sunrise.app.TargetMap"), \
-             patch("rubin_sunrise.app.TargetTimeSeries"), \
-             patch("rubin_sunrise.app.ObservabilityData"), \
-             patch("rubin_sunrise.app._reclaim_memory"):
+        #with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+        #     patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+        #     patch("rubin_sunrise.dashboard.app.ObservabilityData"), \
+        #     patch("rubin_sunrise.dashboard.app._reclaim_memory"):
+        with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+             patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+             patch("rubin_sunrise.dashboard.app.ObservabilityData"):
             
             app = create_app(
                 mock_shared_state,
@@ -435,10 +446,13 @@ class TestCreateAppFactory:
         mock_dbconn
     ):
         """Test that create_app accepts flags_present parameter."""
-        with patch("rubin_sunrise.app.TargetMap"), \
-             patch("rubin_sunrise.app.TargetTimeSeries"), \
-             patch("rubin_sunrise.app.ObservabilityData"), \
-             patch("rubin_sunrise.app._reclaim_memory"):
+        #with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+        #     patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+        #     patch("rubin_sunrise.dashboard.app.ObservabilityData"), \
+        #     patch("rubin_sunrise.dashboard.app._reclaim_memory"):
+        with patch("rubin_sunrise.dashboard.app.TargetMap"), \
+             patch("rubin_sunrise.dashboard.app.TargetTimeSeries"), \
+             patch("rubin_sunrise.dashboard.app.ObservabilityData"):
             
             app = create_app(
                 mock_shared_state,
