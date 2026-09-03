@@ -30,7 +30,6 @@ from rubin_sunrise.dashboard.runner import data_loop
 from rubin_sunrise.dashboard.app import create_app
 from rubin_sunrise.monitoring import ( 
                                     monitor_resources, 
-                                    monitoring_plots,
                                     QuietFilter,
                                     Logger)
 
@@ -88,15 +87,13 @@ def run_display() -> None:
     Keyboard interrupt (Ctrl+C) triggers shutdown sequence.
     """
     # ── Output / logging ────────────────────────────────────────
-    #timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    #run_dir = OUTPUT_BASE / 'logs'
-    #run_dir.mkdir(parents=True, exist_ok=True)
-    #run_dir = OUTPUT_BASE / 'logs' / timestamp
-    #run_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    run_dir = OUTPUT_BASE / 'logs' / 'display_logs' / timestamp
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-    #log_file = open(run_dir / f"log_{timestamp}.txt", "w")
-    #sys.stdout = Logger(sys.stdout, log_file)
-    #sys.stderr = Logger(sys.stderr, log_file)
+    log_file = open(run_dir / f"log_{timestamp}.txt", "w")
+    sys.stdout = Logger(sys.stdout, log_file)
+    sys.stderr = Logger(sys.stderr, log_file)
 
     conn, cur, flags_present = get_database()
 
@@ -111,17 +108,18 @@ def run_display() -> None:
     )
 
     # ── Background threads ──────────────────────────────────────
-    #stop_monitor = threading.Event()
-    #monitor_thread = threading.Thread(
-    #    target=monitor_resources,
-    #    args=(str(run_dir / f"resources_{timestamp}.csv"), 1, stop_monitor),
-    #    daemon=False,
-    #)
-    #monitor_thread.start()
+    stop_monitor = threading.Event()
+    monitor_thread = threading.Thread(
+        target=monitor_resources,
+        args=(str(run_dir / f"resources_{timestamp}.csv"), 1, stop_monitor),
+        daemon=False,
+    )
+    monitor_thread.start()
 
     data_thread = threading.Thread(
         target=data_loop,
-        args=(shared_state, conn, cur, DEFAULT_USER_ID, flags_present),
+        args=(shared_state, conn, cur, DEFAULT_USER_ID, flags_present, 
+              run_dir, timestamp),
         daemon=False,
     )
     data_thread.start()
@@ -140,17 +138,15 @@ def run_display() -> None:
     try:
         print('Starting display update...')
         # Wait for data collection to complete all cycles
-        #data_thread.join()
         app.run(port=PORT)
         print('Display update complete.')
     except KeyboardInterrupt:
         print('\nShutdown requested by user.')
-    #finally:
+    finally:
         # Signal monitor thread to stop and clean up
-        #stop_monitor.set()
-        #monitor_thread.join(timeout=10)
-        #monitoring_plots(run_dir, timestamp, ymax_mb=500)
-        #log_file.close()
+        stop_monitor.set()
+        monitor_thread.join(timeout=10)
+        log_file.close()
 
 
 if __name__ == "__main__":

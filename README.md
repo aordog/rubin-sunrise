@@ -1,7 +1,7 @@
 # Rubin Visits Dashboard
 ## Code to make prototype dashboard showing Rubin LSST progress for a list of targets.
 
-The current version is in a prototyping phase, using data from either the Rubin Schedule Viewer (RSV) or a simulated database (best for offline functionality). Incrementing of observing dates is simulated at a cadence of seconds to minutes, to illustrate how the displays will update with survey progress. The RSV database does **not** include camera angles or bands for the scheduled/completed observations - for now these are simulated and the resulting visits maps/plots should only be interpreted as examples, not reflecting the actual camera/filter settings of the observations. The simulated database (baseline_v3.3_200day.db is the version that ships with the code) offers more realistic camera angles and filter distributions.
+The current version is in a prototyping phase, using data from either the Rubin Schedule Viewer (RSV) or a simulated database (baseline_v3.3_200day.db; best for offline functionality). Incrementing of observing dates is simulated at a cadence of seconds to minutes, to illustrate how the displays will update with survey progress. 
 
 ## Installation of demo version
 
@@ -87,16 +87,19 @@ Set the following parameters in `config.py`:
 - `SIM_END` - the simulated date on which to end updating the dashboard (must be later than `SIM_START`)
 - `DAYS_FORECAST` - the number of ahead days for which to calculate the observability of each target.
 
-**Run the code like this:**
+**The following are the options for running the code like this:**
 
-`python -m rubin_sunrise`
+1. `python -m rubin_sunrise collector`: only runs data collection, populating and updating user-specific database.
+2. `python -m rubin_sunrise display`:
+only runs the front-end web display, updating periodically (requires user-specific database to exist and be updating.)
+3. `python -m rubin_sunrise both --delay 120`: runs both data collection and web display, with the latter starting after an optional delay following start of data collection (default is 60 s.)
 
 Note, **using the medium example query** (663 targets), before the dashboard is displayed:
 
 1. The 'historical' data (between `SIM_HIST` and `SIM_START`) takes ~16 s per date to populate.
 2. The 'forecast' obervability data (`DAYS_FORECAST`) takes ~1.5 s per date to populate.
 
-The web-app should open in your default web browser, and the displays (table and plots) should appear after a few seconds of 'Data Loading' displayed.
+If running the disaply subsystem, the web-app should open in your default web browser, and the displays (table and plots) should appear after a few seconds of 'Data Loading' displayed.
 
 ---
 ## Project Structure
@@ -107,17 +110,25 @@ rubin-sunrise/
 │        ├── __init__.py
 │        ├── __main__.py       # entry point
 │        ├── config.py         # parameters and tunables
-│        ├── lsst.py           # Rubin LSST services
-│        ├── utils.py          # simulation routines for prototyping
-│        ├── database.py       # database setup for user-selected targets
 │        ├── observability.py  # functions for forecasting plots
-│        ├── displays.py       # prepare display data and make HTML plots
-│        ├── pipeline.py       # main background data loop
-│        ├── state.py          # thread-safe shared state; links pipeline to app
-│        ├── app.py            # Flask app factory and routes
-│        └── monitoring.py     # memory/CPU usage monitoring/stress tests
+│        ├── monitoring.py     # memory/CPU usage monitoring/stress tests
+│        ├── collector/
+│        │       ├── __init__.py
+│        │       ├── collector_main.py # entry point for data collection
+│        │       ├── lsst.py           # Rubin LSST services
+│        │       ├── utils.py          # simulation routines for prototyping
+│        │       ├── database.py       # database setup for user-selected targets
+│        │       └── pipeline.py       # main data collection loop
+│        └── dashboard/
+│                ├── __init__.py
+│                ├── dashboard_main.py # entry point for data display
+│                ├── database_read.py  # read in user-specific database
+│                ├── displays.py       # prepare display data and make HTML plots
+│                ├── state.py          # thread-safe shared state; links pipeline to app
+│                ├── app.py            # Flask app factory and routes
+│                └── runner.py         # main data display loop
 ├── templates/
-│   └── index.html             # overall webpage structure
+│   └── index.html  # overall webpage structure
 ├── static/
 │   ├── css/
 │   │    ├── colors-<name>.css # color palettes for webpage
@@ -127,7 +138,12 @@ rubin-sunrise/
 │        └── handlers.js       # javascript for webpage interactions
 ├── docs/                      # INCOMPLETE
 ├── tests/
-│    └── test_comet.py         # INCOMPLETE
+│    ├── test_app.py
+│    ├── test_database.py
+│    ├── test_lsst.py
+│    ├── test_observability.py
+│    ├── test_comet.py        
+│    └── test_rsv_2026-05-16.csv         
 ├── logs/                      # log files, plots of memory/CPU usage monitoring
 ├── schema.sql                 # PostgreSQL database schema to store user targets
 ├── small_query.txt            # 80 example targets above dec=0

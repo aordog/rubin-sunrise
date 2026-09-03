@@ -46,7 +46,10 @@ from rubin_sunrise.collector.lsst import (
     sim_service,
 )
 
-from rubin_sunrise.monitoring import log_table_size
+from rubin_sunrise.monitoring import (
+    log_table_size,
+    monitoring_plots_collector,
+)
 
 print(f"DEBUG: Using pipeline from {__file__}")
 
@@ -151,6 +154,7 @@ def data_loop(
 
         if log_dir is not None and timestamp is not None:
             log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"))
+            monitoring_plots_collector(log_dir, timestamp)
         _reclaim_memory()
         time.sleep(REFRESH_INTERVAL)
         print(f"[CYCLE END #{cycle_number}]")

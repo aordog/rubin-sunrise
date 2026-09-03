@@ -20,6 +20,8 @@ import time
 from astropy.time import Time
 from astropy.visualization import time_support
 from datetime import datetime
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend safe for background threads
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import random
@@ -437,7 +439,7 @@ def stress_test(shared_state: "SharedState", cur) -> None:
 '''
         
 
-def monitoring_plots(dir_files, file_time, ymax_mb=800):
+def monitoring_plots_collector(dir_files, file_time):
     """Generate performance monitoring plots from resource data.
 
     Creates a plot showing memory usage, CPU usage, and annotated event
@@ -455,8 +457,17 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
     """
     time_support()
 
-    data  = pd.read_csv(f"{dir_files}/resources_{file_time}.csv")
-    data2 = pd.read_csv(f"{dir_files}/table_size_{file_time}.csv")
+    try:
+        data = pd.read_csv(f"{dir_files}/resources_{file_time}.csv")
+        data2 = pd.read_csv(f"{dir_files}/table_size_{file_time}.csv")
+    except pd.errors.EmptyDataError:
+        print("WARNING: No monitoring data available yet. Skipping plots.")
+        return
+    
+    # Skip plotting if insufficient data collected
+    if len(data) == 0 or len(data2) == 0:
+        print("WARNING: Monitoring files have no data rows yet. Skipping plots.")
+        return
 
     timestamp   = Time(data['timestamp'].tolist())
     cpu_percent = np.array(data['cpu_percent'])
@@ -472,7 +483,7 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
     plt.subplots_adjust(left=0.1,right=0.95,top=0.95,bottom=0.1,hspace=0.15)
 
     ax[0].plot(timestamp, memory_mb, color='k',linewidth=1)
-    ax[0].set_ylim(0,)
+    ax[0].set_ylim(200,1.1*np.nanmax(memory_mb))
     ax[0].set_ylabel('Memory (MB)')
 
     ax[1].plot(timestamp, cpu_percent, color='k',linewidth=1)
@@ -480,7 +491,7 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
     ax[1].set_ylabel('CPU (%)')
 
     ax[2].plot(timestamp2, filesize, color='k',linewidth=1)
-    ax[2].set_ylim(0,)
+    ax[2].set_ylim(0,1.1*np.nanmax(filesize))
     ax[2].set_ylabel('Table size (MB)')
 
     colors = ['grey', 'blue', 'green']
@@ -508,5 +519,84 @@ def monitoring_plots(dir_files, file_time, ymax_mb=800):
 
     plt.savefig(f"{dir_files}/{file_time}.pdf")
     plt.savefig(f"{dir_files}/{file_time}.png")
+    plt.close(fig)  # Free memory and avoid GUI thread warnings
+
+    return
+
+
+def monitoring_plots_display(dir_files, file_time):
+    """Generate performance monitoring plots from resource data.
+
+    Creates a plot showing memory usage, CPU usage, and annotated event
+    timings (data updates, map toggle, row clicks) from logged monitoring
+    data. Saves output as PDF and PNG files.
+
+    Parameters
+    ----------
+    dir_files : str
+        Base directory containing monitoring data subdirectories.
+    file_time : str
+        Subdirectory and filename prefix for data and output files.
+    ymax_mb : float, optional
+        Maximum memory axis limit in MB. Default is 800.
+    """
+    time_support()
+    
+    try:
+        data = pd.read_csv(f"{dir_files}/resources_{file_time}.csv")
+    except pd.errors.EmptyDataError:
+        print("WARNING: No monitoring data available yet. Skipping plots.")
+        return
+    
+    # Skip plotting if insufficient data collected (header only, no rows)
+    if len(data) == 0:
+        print("WARNING: Monitoring file has no data rows yet. Skipping plots.")
+        return
+    
+    timestamp   = Time(data['timestamp'].tolist())
+    cpu_percent = np.array(data['cpu_percent'])
+    memory_mb   = np.array(data['memory_mb'])
+
+    ts_update  = _read_log(dir_files, file_time, "Updated data for")
+    ts_maptype = _read_log(dir_files, file_time, "Map type")
+    ts_rowpick = _read_log(dir_files, file_time, "Row")
+
+    fig, ax = plt.subplots(2,1, figsize=(10,5.5))
+    plt.subplots_adjust(left=0.1,right=0.95,top=0.95,bottom=0.1,hspace=0.15)
+
+    ax[0].plot(timestamp, memory_mb, color='k',linewidth=1)
+    ax[0].set_ylim(200,np.nanmax(memory_mb))
+    ax[0].set_ylabel('Memory (MB)')
+
+    ax[1].plot(timestamp, cpu_percent, color='k',linewidth=1)
+    ax[1].set_ylim(0,100)
+    ax[1].set_ylabel('CPU (%)')
+
+    colors = ['grey', 'blue', 'green']
+    labels = ['update', 'toggle map', 'click row']
+    linestyles = ['dashed', 'dashed', 'dotted']
+    ts = [ts_update, ts_maptype, ts_rowpick]
+    for k in [0,1]:
+        for j in range(0,3):
+            for i in range(0,len(ts[j])):
+                if i == 0:
+                    ax[k].plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
+                        linewidth=0.5, color=colors[j], label=labels[j])
+                else:
+                    ax[k].plot(Time([ts[j][i], ts[j][i]]),[0,1000], linestyle=linestyles[j], 
+                            linewidth=0.5, color=colors[j])
+
+    for k in range(0,2):
+        ax[k].set_xlim(timestamp[0],timestamp[-1])
+        ax[k].xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        if k < 1:
+            ax[k].legend(framealpha=1, loc='lower left')
+    ax[1].set_xlabel('Time')
+
+    #ax[0].set_title(f'{len(timestamp)} simulated days', fontsize=18)
+
+    plt.savefig(f"{dir_files}/{file_time}.pdf")
+    plt.savefig(f"{dir_files}/{file_time}.png")
+    plt.close(fig)  # Free memory and avoid GUI thread warnings
 
     return

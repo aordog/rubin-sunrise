@@ -32,7 +32,6 @@ from rubin_sunrise.collector.pipeline import data_loop
 
 from rubin_sunrise.monitoring import (
     monitor_resources, 
-    monitoring_plots,
     QuietFilter,
     Logger)
 
@@ -83,9 +82,7 @@ def run_collector() -> None:
     """
     # ── Output / logging ────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    run_dir = OUTPUT_BASE / 'logs'
-    run_dir.mkdir(parents=True, exist_ok=True)
-    run_dir = OUTPUT_BASE / 'logs' / timestamp
+    run_dir = OUTPUT_BASE / 'logs' / 'data_logs' / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = open(run_dir / f"log_{timestamp}.txt", "w")
@@ -143,7 +140,6 @@ def run_collector() -> None:
         # Signal monitor thread to stop and clean up
         stop_monitor.set()
         monitor_thread.join(timeout=10)
-        monitoring_plots(run_dir, timestamp, ymax_mb=500)
         log_file.close()
 
 
