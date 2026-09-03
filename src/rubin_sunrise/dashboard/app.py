@@ -104,15 +104,13 @@ def create_app(
         try:
             fig1_html=TargetMap(gn,local_cur).make_html_visits_map(mn,maptype)
             fig2_html=TargetTimeSeries(gn,mn,local_cur).make_html_visits_plot(mn,maptype)
-            #fig3_html=ObservabilityData(gn,mn,local_cur,date, flags_present).make_html_obs_plot()
-            #fig3_html = ""  # DISABLED FOR TESTING
+            fig3_html=ObservabilityData(gn,mn,local_cur,date, flags_present).make_html_obs_plot()
         finally:
             local_cur.close()
-        #result = jsonify({"status": "ok", "fig1_html": fig1_html, 
-        #                                  "fig2_html": fig2_html, 
-        #                                  "fig3_html": fig3_html})
         result = jsonify({"status": "ok", "fig1_html": fig1_html, 
-                                            "fig2_html": fig2_html})
+                                          "fig2_html": fig2_html, 
+                                          "fig3_html": fig3_html})
+
         #_reclaim_memory()
         return result
 
@@ -141,7 +139,7 @@ def create_app(
             date=snap["date"],
             fig1_html=snap["fig1_html"],
             fig2_html=snap["fig2_html"],
-            #fig3_html=snap["fig3_html"],
+            fig3_html=snap["fig3_html"],
             table_html=snap["table"],
             version=snap["version"],
             countdown_seconds=max(0, snap["next_update"] - time.time()),
@@ -218,7 +216,7 @@ def create_app(
         )
         return _render_plots(gn, mn, maptype, date)
 
-    #@app.route("/obs_plot_update", methods=["POST"])
+    @app.route("/obs_plot_update", methods=["POST"])
     def obs_plot_update() -> dict:
         """Handle observability plot updates based on user click.
 

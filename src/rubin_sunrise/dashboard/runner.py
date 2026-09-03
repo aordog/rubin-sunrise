@@ -42,7 +42,8 @@ from rubin_sunrise.dashboard.displays import (
 )
 #from rubin_sunrise.lsst import rsv_service, sim_service
 
-from rubin_sunrise.monitoring import log_table_size
+from rubin_sunrise.monitoring import monitoring_plots_display
+from rubin_sunrise.dashboard.database_read import get_last_date
 
 if TYPE_CHECKING:
     from rubin_sunrise.dashboard.state import SharedState
@@ -133,6 +134,8 @@ def data_loop(
     cycle_number = 0
     #for date in simulation_dates(SIM_START, SIM_END):
     while cycle_number < 100:
+
+        date = get_last_date(cur)
         cycle_number += 1
 
         # Signal "processing"
@@ -140,7 +143,7 @@ def data_loop(
             cycle_number=cycle_number,
             updating=True,
             progress=0.0,
-            #progress_msg=f"Processing {date}...",
+            progress_msg=f"Processing {date}...",
         )
         
         # Create display objects, extract HTML, and explicitly clean up
@@ -156,9 +159,9 @@ def data_loop(
         fig2_html = fig2_obj.make_html_visits_plot(0, "daily")
         del fig2_obj
         
-        #fig3_obj = ObservabilityData(1, 0, cur, date, flags_present)
-        #fig3_html = fig3_obj.make_html_obs_plot()
-        #del fig3_obj
+        fig3_obj = ObservabilityData(1, 0, cur, date, flags_present)
+        fig3_html = fig3_obj.make_html_obs_plot()
+        del fig3_obj
         
         #print(f"Table:   {len(table_html) / 1024:.1f} KB")
         #print(f"Fig1:    {len(fig1_html)  / 1024:.1f} KB")
@@ -171,11 +174,11 @@ def data_loop(
 
         # Atomically swap in the new data
         shared_state.write(
-            #date=date,
+            date=date,
             table=table_html,
             fig1_html=fig1_html,
             fig2_html=fig2_html,
-            #fig3_html=fig3_html,
+            fig3_html=fig3_html,
             version=shared_state.snapshot()["version"] + 1,
             updating=False,
             progress=0.0,
@@ -183,12 +186,12 @@ def data_loop(
             cycle_number=cycle_number,
         )
 
-        #print("============================")
-        #print(f"Updated display for {date}")
-        #print("============================")
+        print("============================")
+        print(f"Updated display for {date}")
+        print("============================")
 
-        #if log_dir is not None and timestamp is not None:
-        #    log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"))
+        if log_dir is not None and timestamp is not None:
+            monitoring_plots_display(log_dir, timestamp)
         _reclaim_memory()
         time.sleep(REFRESH_INTERVAL)
         print(f"[CYCLE END #{cycle_number}]")

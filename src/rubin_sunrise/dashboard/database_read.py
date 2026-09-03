@@ -81,3 +81,12 @@ def get_database():
     flags_present = False
 
     return conn, cur, flags_present
+
+def get_last_date(cur):
+
+    cur.execute("""
+                SELECT time FROM member_totals
+                """)
+    date = cur.fetchall()[-1][0].strftime("%Y-%m-%d")
+
+    return date

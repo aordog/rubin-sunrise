@@ -785,10 +785,6 @@ def populate_database(conn, cur, camera, user_id, visits, date, shared_state=Non
     - Each group processes its member targets and computes masks
     """
 
-    print('+++++++++++++++++++++++++++++')
-    print('USING THE NEW DATABASE MODULE!')
-    print('+++++++++++++++++++++++++++++')
-
     # Access the groups table, specifying ordering by group_id:
     cur.execute("SELECT group_id, ra_gr, dec_gr FROM groups WHERE user_id = %s ORDER BY group_id",
         (user_id,))
