@@ -345,10 +345,10 @@ def monitor_resources(log_path, interval=5, stop_event=None):
             f.write(f"{ts},{cpu:.1f},{mem:.1f}\n")
             f.flush()
 
-def log_table_size(cur, log_path):
+def log_table_size(cur, log_path, db_name: str | None = None):
     """Log total database size in bytes with timestamp.
 
-    Records the total on-disk size in bytes of the lsst_database along with 
+    Records the total on-disk size in bytes of the database along with 
     the current timestamp. Designed to be called once per iteration of the 
     main data loop in pipeline.py.
 
@@ -358,10 +358,15 @@ def log_table_size(cur, log_path):
         Database cursor for executing size query.
     log_path : str
         Path to output CSV file for table size data.
+    db_name : str | None
+        Database name. If None, uses default from config.
     """
+    if db_name is None:
+        db_name = DB_NAME
+
     file_exists = os.path.isfile(log_path)
 
-    cur.execute("SELECT pg_database_size(%s)", (DB_NAME,))
+    cur.execute("SELECT pg_database_size(%s)", (db_name,))
     total_size = cur.fetchone()[0]
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
 

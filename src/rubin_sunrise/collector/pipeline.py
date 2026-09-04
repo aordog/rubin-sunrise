@@ -30,6 +30,7 @@ from rubin_sunrise.config import (
     SIM_LSST_DB,
     QUERY_TYPE,
     DAYS_FORECAST,
+    DB_NAME,
 )
 from rubin_sunrise.collector.utils import (
     simulation_dates, 
@@ -85,6 +86,7 @@ def data_loop(
     flags_present: bool = False,
     log_dir=None,
     timestamp=None,
+    db_name: str | None = None,
 ) -> None:
     """Iterate over simulated dates, updating database and state.
 
@@ -106,6 +108,8 @@ def data_loop(
         Camera footprint metadata object for the observing instrument.
     user_id : int
         User identifier for filtering database queries (not relevant yet).
+    db_name : str | None
+        Database name. If None, uses default from config.
   
     Notes
     -----
@@ -113,6 +117,9 @@ def data_loop(
     is read from config.py and sets the duration between cycles. Memory is 
     explicitly reclaimed after each cycle via _reclaim_memory().
     """
+    # Use provided db_name or fall back to config default
+    if db_name is None:
+        db_name = DB_NAME
 
     if QUERY_TYPE == 'SIM':
         base_mjd = get_base_mjd(SIM_LSST_DB)
@@ -153,7 +160,7 @@ def data_loop(
             print("============================")
 
         if log_dir is not None and timestamp is not None:
-            log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"))
+            log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"), db_name=db_name)
             monitoring_plots_collector(log_dir, timestamp)
         _reclaim_memory()
         time.sleep(REFRESH_INTERVAL)

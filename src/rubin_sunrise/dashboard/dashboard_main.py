@@ -20,7 +20,7 @@ from rubin_sunrise.config import (
     MEM_TEST_MODE,
     OUTPUT_BASE,
     PORT,
-    QUERY_FILE,
+    DB_NAME,
 )
  
 
@@ -37,7 +37,7 @@ from rubin_sunrise.monitoring import (
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 
 
-def run_display() -> None:
+def run_display(db_name: str | None = None) -> None:
     """Initialize and run the Rubin Dashboard application.
 
     Orchestrates the complete startup sequence for the dashboard:
@@ -65,13 +65,17 @@ def run_display() -> None:
     Log output is simultaneously written to terminal and timestamped
     log file via Logger multi-destination handler.
 
+    Parameters
+    ----------
+    db_name : str | None
+        Database name. If None, uses default from config.
+
     Configuration Parameters
     --------
     All parameters read from rubin_sunrise.config:
     - PORT: Flask server port
     - DEFAULT_USER_ID: Database user identifier
     - INITIAL_OFFSET: Declination limit for target filtering
-    - QUERY_FILE: Path to target catalog
     - MEM_TEST_MODE: Enable/disable automated stress testing
 
     Raises
@@ -86,6 +90,10 @@ def run_display() -> None:
     This function blocks indefinitely while Flask server is running.
     Keyboard interrupt (Ctrl+C) triggers shutdown sequence.
     """
+    # Use provided db_name or fall back to config default
+    if db_name is None:
+        db_name = DB_NAME
+
     # ── Output / logging ────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     run_dir = OUTPUT_BASE / 'logs' / 'display_logs' / timestamp
@@ -95,7 +103,7 @@ def run_display() -> None:
     sys.stdout = Logger(sys.stdout, log_file)
     sys.stderr = Logger(sys.stderr, log_file)
 
-    conn, cur, flags_present = get_database()
+    conn, cur, flags_present = get_database(db_name=db_name)
 
     # ── Shared state & Flask app ────────────────────────────────
     shared_state = SharedState()

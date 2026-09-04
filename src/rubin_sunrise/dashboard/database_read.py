@@ -35,7 +35,7 @@ MASK_COLS = [f'{b}mask' for b in BANDS]
 VISIT_COLS = [f'{b}visits' for b in BANDS]
 
 
-def get_database():
+def get_database(db_name: str | None = None):
     """Initialize user-specific database and load targets for tracking.
     
     Performs one-time setup of the Rubin Dashboard application by:
@@ -47,8 +47,8 @@ def get_database():
     
     Parameters
     ----------
-    user_id : int
-        User ID for database queries and tracking.
+    db_name : str | None
+        Database name. If None, uses default from config.
     
     Returns
     -------
@@ -70,9 +70,11 @@ def get_database():
     - If targets are already loaded for this user, loading is skipped
     - LSST Camera footprint is loaded from rubin_sim_data environment
     """
+    if db_name is None:
+        db_name = DB_NAME
 
     # Open a connection to database
-    conn = psycopg2.connect(dbname="lsst_database")
+    conn = psycopg2.connect(dbname=db_name)
 
     # Use a DictCursor to safely specify columns later
     cur = conn.cursor(cursor_factory=extras.DictCursor)

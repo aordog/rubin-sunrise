@@ -24,6 +24,7 @@ from psycopg2 import extras
 from datetime import timedelta, datetime
 from dateutil.parser import parse
 import csv
+from pathlib import Path
 from rubin_sunrise.collector.utils import (
     simulation_dates, 
     get_base_mjd,
@@ -45,40 +46,37 @@ from rubin_sunrise.config import (
 BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
 MASK_COLS = [f'{b}mask' for b in BANDS]
 VISIT_COLS = [f'{b}visits' for b in BANDS]
-
-
 def _read_csv_file(file_in, declim):
     """Read target catalog from .csv or .txt file with declination filtering.
 
-    Parses a formatted catalog file (e.g., NED query results or 
-    user-generated table) and extracts RA and Dec coordinates, limiting 
-    targets to the LSST declination limit defined by INITIAL_OFFSET in 
-    config.py to discard targets the user may have included that will not be 
-    observable.
+    Parses a formatted catalog file from the data/ directory and extracts 
+    RA and Dec coordinates, limiting targets to the LSST declination limit 
+    defined by INITIAL_OFFSET in config.py.
 
     Parameters
     ----------
     file_in : str
-        Path to input catalog file (.csv or .txt). Requirements/properties:
-        - Must contain columns with 'RA' and 'dec' (case-insensitive; 
-          extra text in column names such as 'target_ra' allowed)
+        Query file name (e.g., 'small_query.txt'). File is loaded from data/ directory.
+        Requirements:
+        - Must contain columns with 'RA' and 'dec' (case-insensitive)
         - Must contain exactly one header row, no additional rows of text.
         - Delimiter is auto-detected
     declim : float
-        Declination limit in degrees. Targets with dec > declim are
-        excluded from the returned list.
+        Declination limit in degrees. Targets with dec > declim are excluded.
 
     Returns
     -------
     tuple of np.ndarray
         (ra_list, dec_list) — Arrays of RA and Dec coordinates (degrees).
     """
+    # Construct path to query file in data/ directory
+    file_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / file_in
 
-    with open(file_in, 'r', encoding='utf-8', newline='') as f:
+    with open(file_path, 'r', encoding='utf-8', newline='') as f:
         sample_data = f.read(4096)
         dialect = csv.Sniffer().sniff(sample_data)
 
-    with open(file_in, 'r', encoding='utf-8', newline='') as f:
+    with open(file_path, 'r', encoding='utf-8', newline='') as f:
         lines = f.readlines()
         header_lc = lines[0].lower().split(sep=dialect.delimiter)
         index_ra = next((i for i, s in enumerate(header_lc) if 'ra' in s), -1)
@@ -96,7 +94,7 @@ def _read_csv_file(file_in, declim):
     #header_idx = next(i for i, line in enumerate(lines) if 'ra' in line.lower())
     header_idx = 0 # assuming no lines to skip before header for now
 
-    df = pd.read_csv(file_in,
+    df = pd.read_csv(file_path,
                     sep=dialect.delimiter,
                     skiprows=header_idx,
                     header=0,
@@ -609,11 +607,16 @@ def _insert_observability(cur, date, member_id, hrs):
     """, (date, member_id_value, hrs_value))
 
 
-def set_up_db():
+def set_up_db(db_name: str | None = None):
     """Create and initialize the database schema for the user-specific table.
 
-    Drops any existing database with the name specified in config, creates a 
+    Drops any existing database with the name specified, creates a 
     new one, and loads the schema from schema.sql.
+
+    Parameters
+    ----------
+    db_name : str | None
+        Database name. If None, uses default from config.
 
     Notes
     -----
@@ -621,13 +624,16 @@ def set_up_db():
     TO DO: for now this is being removed each time for a fresh start each time
     during testing. Will need to revisit how this is handled for final version.
     """
-    subprocess.run(["dropdb", DB_NAME])
-    subprocess.run(["createdb", DB_NAME])
-    subprocess.run(["psql", "-d", DB_NAME, "-f", "schema.sql"])
+    if db_name is None:
+        db_name = DB_NAME
+
+    subprocess.run(["dropdb", db_name])
+    subprocess.run(["createdb", db_name])
+    subprocess.run(["psql", "-d", db_name, "-f", "schema.sql"])
     return
 
 
-def initialize_tracking(user_id, file_in, declim):
+def initialize_tracking(user_id, file_in, declim, db_name: str | None = None):
     """Initialize user-specific database and load targets for tracking.
     
     Performs one-time setup of the Rubin Dashboard application by:
@@ -649,6 +655,8 @@ def initialize_tracking(user_id, file_in, declim):
         excluded from tracking. This can reduce the database size if
         user accidentally inputs targets outside of the Rubin
         observability range.
+    db_name : str | None
+        Database name. If None, uses default from config.
     
     Returns
     -------
@@ -672,6 +680,8 @@ def initialize_tracking(user_id, file_in, declim):
     - If targets are already loaded for this user, loading is skipped
     - LSST Camera footprint is loaded from rubin_sim_data environment
     """
+    if db_name is None:
+        db_name = DB_NAME
 
     # Read in the target list:
     ra_t_list, dec_t_list, all_flags = _read_csv_file(file_in, declim)
@@ -685,7 +695,7 @@ def initialize_tracking(user_id, file_in, declim):
     list_grouped = _group_targets(ra_t_list, dec_t_list, 32)
 
     # Open a connection to database
-    conn = psycopg2.connect(dbname="lsst_database")
+    conn = psycopg2.connect(dbname=db_name)
 
     # Use a DictCursor to safely specify columns later
     cur = conn.cursor(cursor_factory=extras.DictCursor)

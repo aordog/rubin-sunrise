@@ -20,6 +20,7 @@ from rubin_sunrise.config import (
     MEM_TEST_MODE,
     OUTPUT_BASE,
     QUERY_FILE,
+    DB_NAME,
 )
  
 from rubin_sunrise.collector.database import (
@@ -39,7 +40,7 @@ from rubin_sunrise.monitoring import (
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def run_collector() -> None:
+def run_collector(db_name: str | None = None, query_file: str | None = None) -> None:
     """Initialize and run the Rubin Dashboard application.
 
     Orchestrates the complete startup sequence for the dashboard:
@@ -63,6 +64,13 @@ def run_collector() -> None:
     Log output is simultaneously written to terminal and timestamped
     log file via Logger multi-destination handler.
 
+    Parameters
+    ----------
+    db_name : str | None
+        Database name. If None, uses default from config.
+    query_file : str | None
+        Query file path with target coordinates. If None, uses default from config.
+
     Configuration Parameters
     --------
     All parameters read from rubin_sunrise.config:
@@ -80,6 +88,14 @@ def run_collector() -> None:
     -----
     Keyboard interrupt (Ctrl+C) triggers shutdown sequence.
     """
+    # Use provided db_name or fall back to config default
+    if db_name is None:
+        db_name = DB_NAME
+    
+    # Use provided query_file or fall back to config default
+    if query_file is None:
+        query_file = QUERY_FILE
+
     # ── Output / logging ────────────────────────────────────────
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     run_dir = OUTPUT_BASE / 'logs' / 'data_logs' / timestamp
@@ -90,11 +106,11 @@ def run_collector() -> None:
     sys.stderr = Logger(sys.stderr, log_file)
 
     # ── Database ────────────────────────────────────────────────
-    set_up_db()
+    set_up_db(db_name=db_name)
     logging.getLogger("werkzeug").addFilter(QuietFilter())
 
     camera, conn, cur, flags_present = initialize_tracking(
-        DEFAULT_USER_ID, QUERY_FILE, INITIAL_OFFSET,
+        DEFAULT_USER_ID, query_file, INITIAL_OFFSET, db_name=db_name
     )
 
     # ── Populate database with historical data ──────────────────
@@ -115,7 +131,7 @@ def run_collector() -> None:
     data_thread = threading.Thread(
         target=data_loop,
         args=(conn, cur, camera, DEFAULT_USER_ID, flags_present,
-                    run_dir, timestamp),
+                    run_dir, timestamp, db_name),
         daemon=False,
     )
     data_thread.start()
