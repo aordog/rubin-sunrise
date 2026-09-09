@@ -72,9 +72,17 @@ def _reclaim_memory() -> None:
     ``malloc_trim(0)`` to return freed memory pages to the OS. On platforms 
     without ``malloc_trim`` (e.g. macOS), only ``gc.collect()`` runs.
     """
-    gc.collect()
+    # Collect all generations to ensure full cleanup
+    collected = gc.collect()
+    
+    # Force generation 2 collection (most thorough)
+    gc.collect(generation=2)
+    
     if _has_malloc_trim:
-        _libc.malloc_trim(0)
+        result = _libc.malloc_trim(0)
+        print(f"[MEMORY] gc.collect() freed {collected} objects, malloc_trim returned {result}")
+    else:
+        print(f"[MEMORY] gc.collect() freed {collected} objects (malloc_trim not available)")
 
 
 # The main data loop:
