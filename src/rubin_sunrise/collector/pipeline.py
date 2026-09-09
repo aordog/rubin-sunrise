@@ -21,7 +21,7 @@ import gc
 import time
 from typing import TYPE_CHECKING
 from astropy.time import Time
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from rubin_sunrise.config import (
     REFRESH_INTERVAL, 
@@ -139,6 +139,7 @@ def data_loop(
     cycle_number = 0
     for date in simulation_dates(SIM_START, SIM_END):
         cycle_number += 1
+        tstart = datetime.now()
 
         # Reading in data with simulated database option 
         if QUERY_TYPE == 'SIM':
@@ -171,5 +172,9 @@ def data_loop(
             log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"), db_name=db_name)
             monitoring_plots_collector(log_dir, timestamp)
         _reclaim_memory()
-        time.sleep(REFRESH_INTERVAL)
+        now = datetime.now()
+        while Time(now) < Time(tstart)+timedelta(seconds=REFRESH_INTERVAL):
+            now = datetime.now()
+            time.sleep(1)
+        #time.sleep(REFRESH_INTERVAL)
         print(f"[CYCLE END #{cycle_number}]")
