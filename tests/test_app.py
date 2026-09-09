@@ -20,7 +20,7 @@ def mock_shared_state():
         "date": "2025-04-27",
         "fig1_html": "<div>Map plot</div>",
         "fig2_html": "<div>Time series</div>",
-        #"fig3_html": "<div>Observability plot</div>",
+        "fig3_html": "<div>Observability plot</div>",
         "table": "<table><tr><td>Target 1</td></tr></table>",
         "version": "v1.0.0",
         "next_update": current_time + 60,  # 1 min from now
@@ -159,12 +159,12 @@ class TestRowClickedRoute:
         assert json_data["status"] == "ok"
         assert "fig1_html" in json_data
         assert "fig2_html" in json_data
-        #assert "fig3_html" in json_data
+        assert "fig3_html" in json_data
         
         # Check that HTML is actually present (not empty)
         assert len(json_data["fig1_html"]) > 0
         assert len(json_data["fig2_html"]) > 0
-        #assert len(json_data["fig3_html"]) > 0
+        assert len(json_data["fig3_html"]) > 0
     
     def test_row_clicked_with_index_required(self, client):
         """Test that row_clicked requires index in the request.
@@ -252,7 +252,7 @@ class TestMapTypeClickedRoute:
         json_data = response.get_json()
         assert json_data["status"] == "ok"
 
-'''
+
 class TestObsPlotUpdateRoute:
     """Tests for the obs_plot_update() route handling observability updates."""
     
@@ -274,8 +274,8 @@ class TestObsPlotUpdateRoute:
         assert response.status_code == 200
         json_data = response.get_json()
         assert json_data["status"] == "ok"
-        #assert "fig3_html" in json_data
-        #assert len(json_data["fig3_html"]) > 0
+        assert "fig3_html" in json_data
+        assert len(json_data["fig3_html"]) > 0
     
     def test_obs_plot_update_with_default_window(self, client):
         """Test that obs_plot_update uses default window_days when not provided."""
@@ -296,7 +296,7 @@ class TestObsPlotUpdateRoute:
         json_data = response.get_json()
         assert json_data["status"] == "ok"
 
-'''
+
         
 class TestCheckUpdateRoute:
     """Tests for the check_update() polling endpoint."""

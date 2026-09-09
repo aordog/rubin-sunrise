@@ -38,7 +38,7 @@ from rubin_sunrise.config import PORT, STRESS_TEST_CLICK_INTERVAL, DB_NAME
 #if TYPE_CHECKING:
 #    from rubin_sunrise.state import SharedState
 
-
+'''
 def _fetch_valid_rows(cur) -> list[dict]:
     """Query database to get all valid row state tuples.
 
@@ -163,6 +163,8 @@ def _perform_maptype_click(base_url: str, maptype: str, gn: str,
     except Exception as e:
         print(f"Maptype click error: {e}")
 
+'''
+        
 def _read_log(dir_files, file_time, search_string):
     """Extract timestamps from log file matching search string.
 

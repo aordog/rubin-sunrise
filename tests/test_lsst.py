@@ -3,6 +3,7 @@
 import pytest
 import numpy as np
 import pandas as pd
+from unittest.mock import Mock, patch
 import rubin_sunrise.collector.lsst as lsst
 
 @pytest.mark.parametrize(
@@ -119,6 +120,85 @@ def test_get_visit_metadata(ra_t, dec_t, visits_input, expected_count):
     assert len(result['rot']) == expected_count, \
         f"Rotation array length mismatch: expected {expected_count}, got {len(result['rot'])}"
 
+def test_rsv_service_with_mocked_request(monkeypatch):
+    """Test rsv_service correctly parses response and adds bands."""
+    
+    # Mock the requests.get response
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.url = "https://test.url"
+    mock_response.json.return_value = [
+        {'em_min': 3.5e-7, 'em_max': 3.9e-7, 's_ra': 100.0, 's_dec': -30.0, 'obs_id': 1},
+        {'em_min': 4.2e-7, 'em_max': 5.2e-7, 's_ra': 101.0, 's_dec': -30.5, 'obs_id': 2},
+        {'em_min': 6.0e-7, 'em_max': 6.5e-7, 's_ra': 102.0, 's_dec': -31.0, 'obs_id': 3},
+    ]
+    
+    mock_get = Mock(return_value=mock_response)
+    monkeypatch.setattr('requests.get', mock_get)
+    
+    # Call rsv_service
+    result = lsst.rsv_service('2026-05-16')
+    
+    # Verify requests.get was called with correct parameters
+    mock_get.assert_called_once()
+    call_args = mock_get.call_args
+    assert 'params' in call_args.kwargs
+    assert call_args.kwargs['params']['start'] == '2026-05-16'
+    
+    # Verify result is a DataFrame with expected data
+    assert isinstance(result, pd.DataFrame)
+    assert len(result) == 3
+    assert 'band' in result.columns
+    
+    # Verify bands were correctly assigned
+    assert result['band'].iloc[0] == 'u'  # em_min=3.5e-7, em_max=3.9e-7 -> 'u'
+    assert result['band'].iloc[1] == 'g'  # em_min=4.2e-7, em_max=5.2e-7 -> 'g'
+    assert result['band'].iloc[2] == 'r'  # em_min=6.0e-7, em_max=6.5e-7 -> 'r'
+
+
+def test_rsv_service_request_failure(monkeypatch):
+    """Test rsv_service raises AssertionError on failed HTTP request."""
+    
+    # Mock failed response
+    mock_response = Mock()
+    mock_response.status_code = 404
+    
+    mock_get = Mock(return_value=mock_response)
+    monkeypatch.setattr('requests.get', mock_get)
+    
+    # Verify AssertionError is raised
+    with pytest.raises(AssertionError, match="request failed with status 404"):
+        lsst.rsv_service('2026-05-16')
+
+
+def test_get_camera():
+    """Test get_camera initializes LsstCameraFootprint with correct parameters."""
+    
+    # Mock the camera footprint class and import
+    mock_camera = Mock()
+    mock_camera_class = Mock(return_value=mock_camera)
+    
+    # Mock the rubin_scheduler import
+    mock_rubin_scheduler = Mock()
+    mock_rubin_scheduler.LsstCameraFootprint = mock_camera_class
+    
+    # Use patch to mock the import within the lsst module
+    def mock_import_side_effect(name, *args, **kwargs):
+        if 'rubin_scheduler' in name:
+            return mock_rubin_scheduler
+        return __import__(name, *args, **kwargs)
+    
+    with patch('builtins.__import__', side_effect=mock_import_side_effect):
+        result = lsst.get_camera()
+    
+    # Verify LsstCameraFootprint was called with correct parameters
+    mock_camera_class.assert_called_once_with(
+        units='degrees',
+        footprint_file='fov_map.npz'
+    )
+    
+    # Verify it returns the camera object
+    assert result == mock_camera
 
 @pytest.mark.integration
 def test_rsv_service_visits():
