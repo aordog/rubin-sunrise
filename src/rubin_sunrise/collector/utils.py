@@ -15,11 +15,11 @@ from datetime import datetime, timedelta
 from astropy.time import Time
 import sqlite3
 
-BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
-MASK_COLS = [f'{b}mask' for b in BANDS]
-VISIT_COLS = [f'{b}visits' for b in BANDS]
+#BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
+#MASK_COLS = [f'{b}mask' for b in BANDS]
+#VISIT_COLS = [f'{b}visits' for b in BANDS]
 
-
+'''
 def remove_high_dec(ra_in, dec_in, dec_lim):
     """Filter out sources above a declination limit.
 
@@ -70,6 +70,8 @@ def make_fake_src_list(nside, declim):
 
     return remove_high_dec(ra.astype(float), 
                            dec.astype(float), declim)
+
+'''
 
 def simulation_dates(sim_start: datetime, sim_end: datetime) -> list[str]:
     """Generate list of simulated survey dates.

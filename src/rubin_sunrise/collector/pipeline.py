@@ -176,5 +176,4 @@ def data_loop(
         while Time(now) < Time(tstart)+timedelta(seconds=REFRESH_INTERVAL):
             now = datetime.now()
             time.sleep(1)
-        #time.sleep(REFRESH_INTERVAL)
         print(f"[CYCLE END #{cycle_number}]")

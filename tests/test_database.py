@@ -477,6 +477,565 @@ def test_read_grid_and_mask_with_existing_mask():
     assert mask_row is not None
     assert float(mask_row['umask'][0]) > 0  # Has data
 
+
+def test_process_group_first_day(test_date, test_group_id, basic_grid, mock_camera, 
+                                  test_masks, test_visits, monkeypatch):
+    """Verify _process_group on first day (no existing mask)."""
+    ra_grid, dec_grid = basic_grid
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Mock dependencies
+    monkeypatch.setattr(database, '_read_grid_and_mask', 
+                       lambda gid, cur: (ra_grid, dec_grid, None))
+    monkeypatch.setattr(database, '_compute_daily_masks', 
+                       lambda visits, camera, ra_g, dec_g: test_masks)
+    monkeypatch.setattr(database, '_compute_visits', 
+                       lambda ra, dec, ra_g, dec_g, mask: test_visits)
+    
+    # Setup member query
+    member_data = [
+        {'member_id': 101, 'ra_mem': 0.5, 'dec_mem': 0.5},
+        {'member_id': 102, 'ra_mem': 1.5, 'dec_mem': 1.5},
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    # Call _process_group
+    visits = {'ra': [0.5], 'dec': [0.5], 'band': ['r'], 'rot': [0.0]}
+    database._process_group(test_group_id, test_date, visits, mock_camera, 
+                           mock_conn, mock_cur)
+    
+    # Verify: 2 upserts + 1 member query + (2 members × 2 inserts) = 7 calls
+    assert mock_cur.execute.call_count == 7
+    mock_conn.commit.assert_called_once()
+
+
+def test_process_group_with_mask_accumulation(test_date, test_group_id, basic_grid, 
+                                               mock_camera, test_masks, test_visits, monkeypatch):
+    """Verify _process_group accumulates masks correctly on subsequent days."""
+    ra_grid, dec_grid = basic_grid
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Create mask_row with binary data
+    mask_row = {f'{b}mask': test_masks[f'{b}mask'].tobytes() for b in database.BANDS}
+    
+    # Mock dependencies
+    monkeypatch.setattr(database, '_read_grid_and_mask',
+                       lambda gid, cur: (ra_grid, dec_grid, mask_row))
+    monkeypatch.setattr(database, '_compute_daily_masks',
+                       lambda visits, camera, ra_g, dec_g: test_masks)
+    monkeypatch.setattr(database, '_compute_visits',
+                       lambda ra, dec, ra_g, dec_g, mask: test_visits)
+    
+    # Single member
+    mock_cur.fetchall.return_value = [{'member_id': 101, 'ra_mem': 0.5, 'dec_mem': 0.5}]
+    
+    visits = {'ra': [0.5], 'dec': [0.5], 'band': ['r'], 'rot': [0.0]}
+    database._process_group(test_group_id, test_date, visits, mock_camera,
+                           mock_conn, mock_cur)
+    
+    # Verify: 2 upserts + 1 query + 2 inserts = 5 calls
+    assert mock_cur.execute.call_count == 5
+    mock_conn.commit.assert_called_once()
+
+
+def test_process_group_multiple_members(test_date, test_group_id, basic_grid, 
+                                        mock_camera, test_masks, test_visits, monkeypatch):
+    """Verify _process_group correctly processes multiple members and visits."""
+    ra_grid, dec_grid = basic_grid
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Mock dependencies
+    monkeypatch.setattr(database, '_read_grid_and_mask',
+                       lambda gid, cur: (ra_grid, dec_grid, None))
+    monkeypatch.setattr(database, '_compute_daily_masks',
+                       lambda visits, camera, ra_g, dec_g: test_masks)
+    monkeypatch.setattr(database, '_compute_visits',
+                       lambda ra, dec, ra_g, dec_g, mask: test_visits)
+    
+    # Multiple members
+    member_data = [
+        {'member_id': 101, 'ra_mem': 0.0, 'dec_mem': 0.0},
+        {'member_id': 102, 'ra_mem': 1.0, 'dec_mem': 1.0},
+        {'member_id': 103, 'ra_mem': 2.0, 'dec_mem': 2.0},
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    visits = {'ra': [0.5, 1.5], 'dec': [0.5, 1.5], 'band': ['r', 'g'], 'rot': [0.0, 45.0]}
+    database._process_group(test_group_id, test_date, visits, mock_camera,
+                           mock_conn, mock_cur)
+    
+    # Verify: 2 upserts + 1 query + (3 members × 2 inserts) = 9 calls
+    assert mock_cur.execute.call_count == 9
+    mock_conn.commit.assert_called_once()
+
+
+# Tests for populate_database
+
+def test_populate_database_single_group(test_date, mock_camera, monkeypatch):
+    """Verify populate_database processes a single group correctly."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Mock group query result
+    group_data = [
+        {'group_id': 1, 'ra_gr': 100.0, 'dec_gr': -30.0}
+    ]
+    mock_cur.fetchall.return_value = group_data
+    
+    # Mock get_visit_metadata
+    mock_visits_use = {'ra': [100.5], 'dec': [-29.5], 'band': ['r'], 'rot': [0.0]}
+    monkeypatch.setattr(database, 'get_visit_metadata',
+                       lambda visits, ra, dec: mock_visits_use)
+    
+    # Mock _process_group
+    mock_process_group = Mock()
+    monkeypatch.setattr(database, '_process_group', mock_process_group)
+    
+    # Create mock visits DataFrame
+    import pandas as pd
+    visits = pd.DataFrame({'s_ra': [100.5], 's_dec': [-29.5]})
+    
+    database.populate_database(mock_conn, mock_cur, mock_camera, user_id, 
+                               visits, test_date)
+    
+    # Verify group query was executed
+    assert mock_cur.execute.called
+    
+    # Verify _process_group was called once with correct args
+    mock_process_group.assert_called_once()
+    call_args = mock_process_group.call_args
+    assert call_args[0][0] == 1  # group_id
+    assert call_args[0][1] == test_date
+
+
+def test_populate_database_multiple_groups(test_date, mock_camera, monkeypatch):
+    """Verify populate_database iterates through all groups."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Mock multiple groups
+    group_data = [
+        {'group_id': 1, 'ra_gr': 100.0, 'dec_gr': -30.0},
+        {'group_id': 2, 'ra_gr': 150.0, 'dec_gr': -45.0},
+        {'group_id': 3, 'ra_gr': 200.0, 'dec_gr': -60.0},
+    ]
+    mock_cur.fetchall.return_value = group_data
+    
+    # Mock get_visit_metadata to return empty dict (no visits for any group)
+    monkeypatch.setattr(database, 'get_visit_metadata',
+                       lambda visits, ra, dec: {'ra': [], 'dec': [], 'band': [], 'rot': []})
+    
+    # Mock _process_group
+    mock_process_group = Mock()
+    monkeypatch.setattr(database, '_process_group', mock_process_group)
+    
+    import pandas as pd
+    visits = pd.DataFrame()
+    
+    database.populate_database(mock_conn, mock_cur, mock_camera, user_id, 
+                               visits, test_date)
+    
+    # Verify _process_group was called once for each group
+    assert mock_process_group.call_count == 3
+    
+    # Verify group_ids were processed in order
+    call_group_ids = [call[0][0] for call in mock_process_group.call_args_list]
+    assert call_group_ids == [1, 2, 3]
+
+
+def test_populate_database_with_shared_state(test_date, mock_camera, monkeypatch):
+    """Verify populate_database updates shared_state progress correctly."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_shared_state = Mock()
+    
+    # Mock groups
+    group_data = [
+        {'group_id': 1, 'ra_gr': 100.0, 'dec_gr': -30.0},
+        {'group_id': 2, 'ra_gr': 150.0, 'dec_gr': -45.0},
+    ]
+    mock_cur.fetchall.return_value = group_data
+    
+    monkeypatch.setattr(database, 'get_visit_metadata',
+                       lambda visits, ra, dec: {'ra': [], 'dec': [], 'band': [], 'rot': []})
+    
+    mock_process_group = Mock()
+    monkeypatch.setattr(database, '_process_group', mock_process_group)
+    
+    import pandas as pd
+    visits = pd.DataFrame()
+    
+    database.populate_database(mock_conn, mock_cur, mock_camera, user_id, 
+                               visits, test_date, shared_state=mock_shared_state)
+    
+    # Verify shared_state.write was called twice (once per group)
+    assert mock_shared_state.write.call_count == 2
+    
+    # Verify progress updates
+    calls = mock_shared_state.write.call_args_list
+    
+    # First group: 1/2 = 0.5 progress
+    first_call_kwargs = calls[0][1]
+    assert first_call_kwargs['progress'] == 0.5
+    assert "1/2" in first_call_kwargs['progress_msg']
+    
+    # Second group: 2/2 = 1.0 progress
+    second_call_kwargs = calls[1][1]
+    assert second_call_kwargs['progress'] == 1.0
+    assert "2/2" in second_call_kwargs['progress_msg']
+
+
+def test_populate_database_no_groups(test_date, mock_camera, monkeypatch):
+    """Verify populate_database handles case with no groups."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    
+    # Mock empty group query result
+    mock_cur.fetchall.return_value = []
+    
+    mock_process_group = Mock()
+    monkeypatch.setattr(database, '_process_group', mock_process_group)
+    
+    import pandas as pd
+    visits = pd.DataFrame()
+    
+    database.populate_database(mock_conn, mock_cur, mock_camera, user_id, 
+                               visits, test_date)
+    
+    # Verify _process_group was not called
+    mock_process_group.assert_not_called()
+
+
+# Tests for populate_forecast
+
+def test_populate_forecast_single_member(test_date, monkeypatch):
+    """Verify populate_forecast processes single member correctly."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_insert_obs = Mock()
+    
+    # Mock member query
+    member_data = [
+        {'member_id': 101, 'ra_mem': 100.0, 'dec_mem': -30.0}
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    # Mock external functions
+    mock_az = np.array([180.0])
+    mock_el = np.array([45.0])
+    mock_t_utc = np.array([0.0])
+    
+    monkeypatch.setattr(database, 'get_az_el', 
+                       lambda ra, dec, date: (mock_az, mock_el, mock_t_utc))
+    monkeypatch.setattr(database, 'daily_observability',
+                       lambda el, date, t_utc: 8.5)
+    monkeypatch.setattr(database, '_insert_observability', mock_insert_obs)
+    
+    # Call populate_forecast
+    database.populate_forecast(mock_conn, mock_cur, user_id, test_date)
+    
+    # Verify member query was executed
+    assert mock_cur.execute.called
+    call_args = mock_cur.execute.call_args_list[0]
+    assert 'members' in call_args[0][0]
+    assert call_args[0][1][0] == user_id
+    
+    # Verify _insert_observability was called once with correct member_id
+    mock_insert_obs.assert_called_once()
+    call_args = mock_insert_obs.call_args[0]
+    assert call_args[1] == test_date
+    assert call_args[2] == 101  # member_id
+    assert call_args[3] == 8.5  # hours value
+    
+    mock_conn.commit.assert_called_once()
+
+
+def test_populate_forecast_multiple_members(test_date, monkeypatch):
+    """Verify populate_forecast processes multiple members."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_insert_obs = Mock()
+    
+    # Mock multiple members
+    member_data = [
+        {'member_id': 101, 'ra_mem': 100.0, 'dec_mem': -30.0},
+        {'member_id': 102, 'ra_mem': 150.0, 'dec_mem': -45.0},
+        {'member_id': 103, 'ra_mem': 200.0, 'dec_mem': -60.0},
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    # Mock external functions to return arrays matching number of members
+    mock_az = np.array([180.0, 190.0, 200.0])
+    mock_el = np.array([45.0, 30.0, 15.0])
+    mock_t_utc = np.array([0.0, 0.0, 0.0])
+    
+    monkeypatch.setattr(database, 'get_az_el',
+                       lambda ra, dec, date: (mock_az, mock_el, mock_t_utc))
+    monkeypatch.setattr(database, 'daily_observability',
+                       lambda el, date, t_utc: 8.5)
+    monkeypatch.setattr(database, '_insert_observability', mock_insert_obs)
+    
+    # Call populate_forecast
+    database.populate_forecast(mock_conn, mock_cur, user_id, test_date)
+    
+    # Verify _insert_observability was called 3 times with correct member_ids
+    assert mock_insert_obs.call_count == 3
+    
+    calls = mock_insert_obs.call_args_list
+    member_ids = [call[0][2] for call in calls]  # member_id is 3rd arg
+    assert member_ids == [101, 102, 103]
+    
+    mock_conn.commit.assert_called_once()
+
+
+# Tests for populate_obs_flags
+
+def test_populate_obs_flags_single_member(test_date, monkeypatch):
+    """Verify populate_obs_flags processes single member."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_insert_obs_flags = Mock()
+    
+    # Mock member query
+    member_data = [
+        {'member_id': 101, 'ra_mem': 100.0, 'dec_mem': -30.0}
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    # Mock _insert_obs_flags since it's already tested separately
+    monkeypatch.setattr(database, '_insert_obs_flags', mock_insert_obs_flags)
+    
+    # Create flags array matching number of members
+    flags = np.array([1])
+    
+    # Call populate_obs_flags
+    database.populate_obs_flags(mock_conn, mock_cur, user_id, test_date, flags)
+    
+    # Verify member query
+    assert mock_cur.execute.called
+    call_args = mock_cur.execute.call_args_list[0]
+    assert 'members' in call_args[0][0]
+    
+    # Verify _insert_obs_flags was called once with correct member_id and flag
+    mock_insert_obs_flags.assert_called_once()
+    call_args = mock_insert_obs_flags.call_args[0]
+    assert call_args[1] == test_date
+    assert call_args[2] == 101  # member_id
+    assert call_args[3] == 1    # flag
+    
+    mock_conn.commit.assert_called_once()
+
+
+def test_populate_obs_flags_multiple_members(test_date, monkeypatch):
+    """Verify populate_obs_flags processes multiple members with different flags."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_insert_obs_flags = Mock()
+    
+    # Mock multiple members
+    member_data = [
+        {'member_id': 101, 'ra_mem': 100.0, 'dec_mem': -30.0},
+        {'member_id': 102, 'ra_mem': 150.0, 'dec_mem': -45.0},
+    ]
+    mock_cur.fetchall.return_value = member_data
+    
+    # Mock _insert_obs_flags
+    monkeypatch.setattr(database, '_insert_obs_flags', mock_insert_obs_flags)
+    
+    # Flags array
+    flags = np.array([1, 0])
+    
+    database.populate_obs_flags(mock_conn, mock_cur, user_id, test_date, flags)
+    
+    # Verify _insert_obs_flags was called twice with correct member_ids and flags
+    assert mock_insert_obs_flags.call_count == 2
+    
+    calls = mock_insert_obs_flags.call_args_list
+    assert calls[0][0][2] == 101  # first member_id
+    assert calls[0][0][3] == 1    # first flag
+    assert calls[1][0][2] == 102  # second member_id
+    assert calls[1][0][3] == 0    # second flag
+    
+    mock_conn.commit.assert_called_once()
+
+
+# Tests for populate_history
+
+def test_populate_history_sim_path_with_data(mock_camera, monkeypatch):
+    """Verify populate_history processes SIM data correctly."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_populate_db = Mock()
+    
+    # Mock config
+    monkeypatch.setattr(database, 'QUERY_TYPE', 'SIM')
+    monkeypatch.setattr(database, 'SIM_HIST', pd.Timestamp('2026-08-10'))
+    monkeypatch.setattr(database, 'SIM_START', pd.Timestamp('2026-08-13'))
+    monkeypatch.setattr(database, 'SIM_LSST_DB', '/path/to/db')
+    
+    # Mock external functions
+    monkeypatch.setattr(database, 'get_base_mjd', lambda db: 60000)
+    monkeypatch.setattr(database, 'date_to_nightnum',
+                       lambda date, mjd: 100)  # return constant
+    
+    # Mock sim_service_range to return visits for some nights
+    mock_visits_sim = pd.DataFrame({'s_ra': [100.0, 101.0], 's_dec': [-30.0, -31.0]})
+    monkeypatch.setattr(database, 'sim_service_range',
+                       lambda min_night, max_night: {100: mock_visits_sim, 101: mock_visits_sim})
+    
+    # Mock simulation_dates to return 3 dates
+    test_dates = [
+        pd.Timestamp('2026-08-10'),
+        pd.Timestamp('2026-08-11'),
+        pd.Timestamp('2026-08-12'),
+    ]
+    monkeypatch.setattr(database, 'simulation_dates',
+                       lambda start, end: test_dates)
+    
+    # Mock populate_database
+    monkeypatch.setattr(database, 'populate_database', mock_populate_db)
+    
+    # Call populate_history
+    database.populate_history(mock_conn, mock_cur, mock_camera, user_id)
+    
+    # Verify populate_database was called 3 times (once per date)
+    assert mock_populate_db.call_count == 3
+    
+    # Verify correct date parameters
+    dates_called = [call[0][5] for call in mock_populate_db.call_args_list]
+    assert dates_called == test_dates
+
+
+def test_populate_history_sim_path_missing_data(mock_camera, monkeypatch):
+    """Verify populate_history handles missing data in SIM path."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_populate_db = Mock()
+    
+    monkeypatch.setattr(database, 'QUERY_TYPE', 'SIM')
+    monkeypatch.setattr(database, 'SIM_HIST', pd.Timestamp('2026-08-10'))
+    monkeypatch.setattr(database, 'SIM_START', pd.Timestamp('2026-08-13'))
+    monkeypatch.setattr(database, 'SIM_LSST_DB', '/path/to/db')
+    monkeypatch.setattr(database, 'get_base_mjd', lambda db: 60000)
+    monkeypatch.setattr(database, 'date_to_nightnum',
+                       lambda date, mjd: 100)
+    
+    # Empty visits_by_night dict (no data)
+    monkeypatch.setattr(database, 'sim_service_range',
+                       lambda min_night, max_night: {})
+    
+    test_dates = [
+        pd.Timestamp('2026-08-10'),
+        pd.Timestamp('2026-08-11'),
+    ]
+    monkeypatch.setattr(database, 'simulation_dates',
+                       lambda start, end: test_dates)
+    
+    monkeypatch.setattr(database, 'populate_database', mock_populate_db)
+    
+    database.populate_history(mock_conn, mock_cur, mock_camera, user_id)
+    
+    # Verify populate_database was NOT called (no data available)
+    mock_populate_db.assert_not_called()
+
+
+def test_populate_history_rsv_path_with_data(mock_camera, monkeypatch):
+    """Verify populate_history processes RSV data correctly."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_populate_db = Mock()
+    mock_rsv_service = Mock()
+    
+    monkeypatch.setattr(database, 'QUERY_TYPE', 'RSV')
+    monkeypatch.setattr(database, 'SIM_HIST', pd.Timestamp('2026-08-10'))
+    monkeypatch.setattr(database, 'SIM_START', pd.Timestamp('2026-08-12'))
+    
+    # Mock simulation_dates
+    test_dates = [
+        pd.Timestamp('2026-08-10'),
+        pd.Timestamp('2026-08-11'),
+    ]
+    monkeypatch.setattr(database, 'simulation_dates',
+                       lambda start, end: test_dates)
+    
+    # Mock rsv_service to return data
+    mock_visits_rsv = pd.DataFrame({'s_ra': [100.0], 's_dec': [-30.0]})
+    mock_rsv_service.return_value = mock_visits_rsv
+    monkeypatch.setattr(database, 'rsv_service', mock_rsv_service)
+    
+    monkeypatch.setattr(database, 'populate_database', mock_populate_db)
+    
+    database.populate_history(mock_conn, mock_cur, mock_camera, user_id)
+    
+    # Verify rsv_service was called for each date
+    assert mock_rsv_service.call_count == 2
+    
+    # Verify populate_database was called 2 times
+    assert mock_populate_db.call_count == 2
+
+
+def test_populate_history_rsv_path_missing_data(mock_camera, monkeypatch):
+    """Verify populate_history handles missing RSV data gracefully."""
+    user_id = 1
+    
+    mock_cur = Mock()
+    mock_conn = Mock()
+    mock_populate_db = Mock()
+    mock_rsv_service = Mock()
+    
+    monkeypatch.setattr(database, 'QUERY_TYPE', 'RSV')
+    monkeypatch.setattr(database, 'SIM_HIST', pd.Timestamp('2026-08-10'))
+    monkeypatch.setattr(database, 'SIM_START', pd.Timestamp('2026-08-12'))
+    
+    test_dates = [
+        pd.Timestamp('2026-08-10'),
+        pd.Timestamp('2026-08-11'),
+    ]
+    monkeypatch.setattr(database, 'simulation_dates',
+                       lambda start, end: test_dates)
+    
+    # rsv_service returns empty DataFrame (no data)
+    mock_rsv_service.return_value = pd.DataFrame()
+    monkeypatch.setattr(database, 'rsv_service', mock_rsv_service)
+    
+    monkeypatch.setattr(database, 'populate_database', mock_populate_db)
+    
+    database.populate_history(mock_conn, mock_cur, mock_camera, user_id)
+    
+    # Verify rsv_service was still called
+    assert mock_rsv_service.call_count == 2
+    
+    # But populate_database should not be called (no data)
+    mock_populate_db.assert_not_called()
+
 #@pytest.mark.parametrize(
 #    "",
 #    [
