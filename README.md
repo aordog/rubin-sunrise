@@ -24,7 +24,7 @@ The current version is in a prototyping phase, using data from either the Rubin 
 The code requires `PostgreSQL` for building the user-specific database that provides the data to the plots. This needs to be installed separately.
 
 ### Linux:
-Tested on Ubuntu 24.04.4 by Anna Ordog.
+Tested on Ubuntu 24.04.4 and 26.04.1 by Anna Ordog.
 1. Install via command line:
 
     `sudo apt install postgresql postgresql-contrib`
@@ -32,15 +32,25 @@ Tested on Ubuntu 24.04.4 by Anna Ordog.
 
     `sudo -u postgres createuser --createdb $(whoami)`
 
-3. Create a test database to check:
+3. For optimal compression of `BYTEA` table columns (used for 2D visits grids), PostgreSQL should be using `TOAST`, which may not be enabled by default. Edit the PostgreSQL config file if needed:
+
+    `nano /etc/postgresql/<version>/main/postgresql.conf`
+
+    `default_toast_compression = lz4`
+    
+    Then save the file and restart PostgreSQL:
+    `sudo systemctl restart postgresql`
+
+Verify basic functionality:
+1. Create a test database:
 
     `createdb mydb`
 
-4. Connect to it:
+2. Connect to it:
 
     `psql mydb`
 
-5. Quit `psql` using `\q`; delete the test database using `dropdb mydb`
+3. Quit `psql` using `\q`; delete the test database using `dropdb mydb`
 
 ### Mac OS:
 Tested on MacOS Tahoe 26.5.1 by Eric Wang
@@ -152,27 +162,4 @@ rubin-sunrise/
 ├── baseline_v3.3_200day.db    # simulated LSST database for 200 days of data
 ├── fov_map.npz                # LSST camera footprint file
 └── pyproject.toml        
-```
-
-This diagram illustrates the workflow of the main data loop in `pipeline.py`:
-
-```mermaid
-graph TD
-    A[database.initialize_tracking] --> B[BEGIN data_loop on dates]
-    B --> C[visits: lsst.rsv_service]
-    C --> D[database.populate_database]
-
-    subgraph     
-        E[display one row using displays.py module]
-        E --> F[TableData.make_html_table]
-        F --> G[TargetMap.make_html_visits_map]
-        G --> H[TargetTimeSeries.make_html_visits_plot]
-        H --> I[ObservabilityData.make_html_obs_plot]
-        I --> K{Row clicked OR<br/>Maptype toggled?}
-        K -->|Yes| E
-    end
-
-    D --> E
-    K -->|No| J[END data_loop]
-    J --> B
 ```
