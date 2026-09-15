@@ -555,8 +555,6 @@ def _process_group(gid, date, visits, camera, conn, cur):
         _insert_member_totals(cur, date, mem['member_id'], total_v)
         _insert_daily_visits(cur, date, mem['member_id'], daily_v)
 
-    conn.commit()
-    
     return
 
 def _insert_obs_flags(cur, date, member_id, flag):
@@ -816,6 +814,7 @@ def populate_database(conn, cur, camera, user_id, visits, date, shared_state=Non
                 progress_msg=f"UPDATING... processing group {i+1}/{n_groups}",
         )
 
+    conn.commit()
     return
 
 def populate_obs_flags(conn, cur, user_id, date, flags):

@@ -29,7 +29,7 @@ def cleanup(signum=None, frame=None):
 signal.signal(signal.SIGINT, cleanup)
 
 try:
-    for i in range(0, 20):
+    for i in range(0, 15):
         db_name = f'testdb_{i:03d}'
         file_name = f'testfile_{i:03d}.txt'
 
