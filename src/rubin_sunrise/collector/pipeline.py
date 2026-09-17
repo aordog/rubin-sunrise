@@ -45,6 +45,7 @@ from rubin_sunrise.collector.database import (
 from rubin_sunrise.collector.lsst import (
     rsv_service, 
     sim_service,
+    rsv_local,
 )
 
 from rubin_sunrise.monitoring import (
@@ -134,6 +135,8 @@ def data_loop(
         print(f"Querying simulated LSST data base: {SIM_LSST_DB}")
     if QUERY_TYPE == 'RSV':
         print(f"Querying Rubin Schedule Viewer")
+    if QUERY_TYPE == 'Local':
+        print(f"Querying local copy of Rubin Schedule Viewer")
     print('=====================================================')
 
     cycle_number = 0
@@ -151,6 +154,12 @@ def data_loop(
         if QUERY_TYPE == 'RSV':
             print(f"[CYCLE START #{cycle_number}] {date}")
             visits = rsv_service(date)
+
+        # Reading in data with local copy of RSV option    
+        if QUERY_TYPE == 'Local':
+            print(f"[CYCLE START #{cycle_number}] {date}")
+            print('+++++ Attempting Local Copy!!!+++++')
+            visits = rsv_local(date, "local_rsv")
 
         if visits.empty:
             print(f"DATA MISSING for {date}")

@@ -13,7 +13,7 @@ import astropy.units as u
 from astropy import coordinates as coord
 
 ########### USER INPUTS #########
-QUERY_FILE     = "large_query.txt" # File with user-selected targets
+QUERY_FILE     = "medium_query.txt" # File with user-selected targets
 INITIAL_OFFSET = 0.0               # declination limit to filter targets
 OBS_FLAGS      = False            # Additional observability flags available
 #################################
@@ -29,8 +29,8 @@ DT = 5.0/60.0 # Time increment for observability plots (hours)
 LOC = coord.EarthLocation.of_site('LSST') # Rubin location for obs. plots
 
 # Simulated LSST survey (for testing)
-QUERY_TYPE = 'RSV' # Options: RSV, SIM
-REFRESH_INTERVAL: int = 120 # refresh rate for simulated iterations
+QUERY_TYPE = 'Local' # Options: RSV, SIM, Local
+REFRESH_INTERVAL: int = 45 # refresh rate for simulated iterations
 SIM_HIST  = datetime(2026, 6, 3) # simulated historical data (prior to query)
 SIM_START = datetime(2026, 6, 4)  # simulated days start
 SIM_END   = datetime(2026, 7, 20) # simulated days end
