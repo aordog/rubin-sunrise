@@ -35,6 +35,7 @@ from rubin_sunrise.collector.lsst import (
     get_visit_metadata,
     rsv_service,
     sim_service_range,
+    rsv_local,
 )
 from rubin_sunrise.observability import daily_observability, get_az_el
 
@@ -964,6 +965,12 @@ def populate_history(conn, cur, camera, user_id):
         if QUERY_TYPE == 'RSV':
             print(f"[CYCLE START #{cycle_number}] {date}")
             visits = rsv_service(date)
+
+        # Reading in data with local copy of RSV option    
+        if QUERY_TYPE == 'Local':
+            print(f"[CYCLE START #{cycle_number}] {date}")
+            print('+++++ Attempting history with Local Copy!!!+++++')
+            visits = rsv_local(date, "local_rsv")
 
         if visits.empty:
             print(f"DATA MISSING for {date}")

@@ -21,6 +21,8 @@ import numpy as np
 import pandas as pd
 import requests
 import sqlite3
+import psycopg2
+from psycopg2 import extras
 
 from rubin_sunrise.config import SIM_LSST_DB
 
@@ -149,6 +151,52 @@ def rsv_service(date: str) -> pd.DataFrame:
         bands.append(_em_min_max_to_band(visits['em_min'][i], 
                                          visits['em_max'][i]))
     visits['band'] = bands
+
+    return visits
+
+def rsv_local(date: str, db_name: str) -> pd.DataFrame:
+    """Query local copy of Rubin Schedule Viewer for observation visits.
+
+    Retrieves scheduled observation data from the local PostgreSQL copy of the
+    Rubin Schedule Viewer (RSV) for a specified date. The database returns 
+    visit information including sky coordinates, execution status and bands 
+    for visits.
+
+    Parameters
+    ----------
+    date : str
+        Query date in ISO format expected by RSV service.
+
+    Returns
+    -------
+    pd.DataFrame
+        Observation visit data with columns: s_ra, s_dec, execution_status, 
+        obs_id, and others from RSV. Also includes derived variable, 'band'
+
+    Raises
+    ------
+
+
+    Notes
+    -----
+    Requires a local copy of the RSV database covering the dates being queried.
+
+    """
+
+    print(db_name)
+    conn = psycopg2.connect(dbname=db_name)
+    cur = conn.cursor(cursor_factory=extras.DictCursor)
+
+    cur.execute(f"""
+            SELECT s_ra, s_dec, rubin_rot_sky_pos, band, execution_status FROM visits 
+            WHERE time = %s
+            """, (str(date),))
+
+    columns = [desc[0] for desc in cur.description]
+    visits = pd.DataFrame(cur.fetchall(), columns=columns)
+    #print(visits)
+    cur.close()
+    conn.close() 
 
     return visits
 
@@ -337,7 +385,7 @@ def get_visit_metadata(visits,
     ra = np.array(visits["s_ra"])
     dec = np.array(visits["s_dec"])
     status = np.array(visits["execution_status"])
-    obs_id = visits["obs_id"]
+    #obs_id = visits["obs_id"]
 
     idxs = _target_visits_idxs(ra_t, dec_t, r, ra, dec, status)
 
