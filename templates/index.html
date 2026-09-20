@@ -14,6 +14,10 @@
     <div class="hero">
         <div class="hero-title">
             <h1>Rubin LSST progress:<br> {{date | safe}}</h1>
+            <!-- Countdown -->
+            <div id="countdown-display">
+                <span id="countdown-value">Next simulated date in --</span>
+            </div>
         </div>
         <img src="/static/camera_footprints.png" alt="Camera footprints" class="hero-cameras">
         <img src="/static/candiapl-logo.png" alt="Logo" class="hero-logo">
@@ -42,13 +46,6 @@
                     {% if flags_present %}
                     * User-define observability flags are active
                     {% endif %}
-                </div>
-                <!-- Countdown + progress bar -->
-                <div id="countdown-display">
-                    <span id="countdown-value">Next update: --</span>
-                    <div class="progress-track">
-                        <div id="progress-fill" class="progress-fill"></div>
-                    </div>
                 </div>
             </div>
 

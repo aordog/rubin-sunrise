@@ -191,8 +191,8 @@ h2 {
 /* ---------- Countdown to next refresh ---------- */
 #countdown-display {
     text-align: center;
-    font-size: 14px;
-    color: var(--c-tabletext);
+    font-size: 20px;
+    color: white;
     padding: 8px 0;
 }
 #countdown-value {
@@ -231,8 +231,8 @@ h2 {
     font-weight: bold;
     border: 2px solid var(--c-plots);
     border-radius: 6px;
-    background-color:  var(--c-plots);
-    color: var(--c-headers);
+    background-color:  var(--c-headers);
+    color: var(--c-plots);
     cursor: pointer;
     margin: 0 4px;
 }
@@ -240,8 +240,8 @@ h2 {
     background-color: var(--c-hover);
 }
 .maptype-btn.active {
-    background-color: var(--c-headers);
-    color:  var(--c-plots);
+    background-color: var(--c-plots);
+    color:  var(--c-headers);
 }
 
 .sortable-table thead th {

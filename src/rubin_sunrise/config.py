@@ -13,7 +13,7 @@ import astropy.units as u
 from astropy import coordinates as coord
 
 ########### USER INPUTS #########
-QUERY_FILE     = "medium_query.txt" # File with user-selected targets
+QUERY_FILE     = "small_query.txt" # File with user-selected targets
 INITIAL_OFFSET = 0.0               # declination limit to filter targets
 OBS_FLAGS      = False            # Additional observability flags available
 #################################
@@ -22,20 +22,23 @@ OBS_FLAGS      = False            # Additional observability flags available
 PORT = 8000 # Server
 DEFAULT_USER_ID: int  = 1  # User ID. TO DO: REVISIT WHEN ADDING USERS!
 DB_NAME = "lsst_database"  # Name of user-specific database
+CLOCK_DB_NAME = "rubin_clock"  # Name of shared clock database (independent of user DBs)
 #OUTPUT_BASE = Path("/home/aordog/Dropbox/candiapl/rubin-dash-out/")
 OUTPUT_BASE = Path(__file__).parent.parent.parent
-DAYS_FORECAST = 30 # Number of days for which to calculate observability
+DAYS_FORECAST = 60 # Number of days for which to calculate observability
 DT = 5.0/60.0 # Time increment for observability plots (hours)
 LOC = coord.EarthLocation.of_site('LSST') # Rubin location for obs. plots
 
 # Simulated LSST survey (for testing)
 QUERY_TYPE = 'Local' # Options: RSV, SIM, Local
-REFRESH_INTERVAL: int = 45 # refresh rate for simulated iterations
+REFRESH_INTERVAL: int = 120 # refresh rate for simulated iterations
 SIM_HIST  = datetime(2026, 6, 3) # simulated historical data (prior to query)
 SIM_START = datetime(2026, 6, 4)  # simulated days start
 SIM_END   = datetime(2026, 7, 20) # simulated days end
 VERBOSE = False  # Show debug columns in table (gr_name, gr_num, mem_num)
 SIM_LSST_DB = "baseline_v3.3_200day.db"
+SIM_SPEEDUP_FACTOR: float = 720.0  # speedup multiplier: 1 real second = 720 simulated seconds
+                                    # (2 real minutes = 1 simulated day)
 
 # Stress testing
 MEM_TEST_MODE = False  # Turn on memory stress testing (simulated clicks)
