@@ -124,16 +124,16 @@ function updateCountdown() {
     const track = document.querySelector('.progress-track');
 
     if (updating) {
-        track.style.display = 'block';
+        if (track) track.style.display = 'block';
         el.textContent = progressMsg || 'Processing...';
-        fill.style.width = Math.round(progress * 100) + '%';
+        if (fill) fill.style.width = Math.round(progress * 100) + '%';
     } else {
-        track.style.display = 'none';
+        if (track) track.style.display = 'none';
         if (remaining > 0) {
-            el.textContent = 'Next update in ' + Math.ceil(remaining) + 's';
+            el.textContent = 'Next simulated date in ' + Math.ceil(remaining) + 's';
             remaining -= 1;
         } else {
-            el.textContent = 'Next update in 0s';
+            el.textContent = 'Next simulated date in 0s';
         }
     }
 }
