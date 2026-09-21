@@ -32,6 +32,7 @@ from rubin_sunrise.config import (
     SIM_LSST_DB,
     QUERY_TYPE,
     DAYS_FORECAST,
+    DB_NAME,
 )
 
 from rubin_sunrise.dashboard.displays import (
@@ -44,6 +45,8 @@ from rubin_sunrise.dashboard.displays import (
 
 from rubin_sunrise.monitoring import monitoring_plots_display
 from rubin_sunrise.dashboard.database_read import get_last_date
+import psycopg2
+from psycopg2 import extras
 
 if TYPE_CHECKING:
     from rubin_sunrise.dashboard.state import SharedState
@@ -80,6 +83,7 @@ def data_loop(
     flags_present: bool = False,
     log_dir=None,
     timestamp=None,
+    db_name: str | None = None,
 ) -> None:
     """Iterate over simulated dates, updating database and state.
 
@@ -130,68 +134,127 @@ def data_loop(
     is read from config.py and sets the duration between cycles. Memory is 
     explicitly reclaimed after each cycle via _reclaim_memory().
     """
+    # Use provided db_name or fall back to config default
+    if db_name is None:
+        db_name = DB_NAME
 
     cycle_number = 0
     #for date in simulation_dates(SIM_START, SIM_END):
     while cycle_number < 100:
 
-        date = get_last_date(cur)
-        cycle_number += 1
+        try:
+            # Attempt to get the last date from database
+            date = get_last_date(cur)
+            cycle_number += 1
 
-        # Signal "processing"
-        shared_state.write(
-            cycle_number=cycle_number,
-            updating=True,
-            progress=0.0,
-            progress_msg=f"Processing {date}...",
-        )
-        
-        # Create display objects, extract HTML, and explicitly clean up
-        table_obj = TableData(cur)
-        table_html = table_obj.make_html_table()
-        del table_obj
-        
-        fig1_obj = TargetMap(1, cur)
-        fig1_html = fig1_obj.make_html_visits_map(0, "daily")
-        del fig1_obj
-        
-        fig2_obj = TargetTimeSeries(1, 0, cur)
-        fig2_html = fig2_obj.make_html_visits_plot(0, "daily")
-        del fig2_obj
-        
-        fig3_obj = ObservabilityData(1, 0, cur, date, flags_present)
-        fig3_html = fig3_obj.make_html_obs_plot()
-        del fig3_obj
-        
-        #print(f"Table:   {len(table_html) / 1024:.1f} KB")
-        #print(f"Fig1:    {len(fig1_html)  / 1024:.1f} KB")
-        #print(f"Fig2:    {len(fig2_html)  / 1024:.1f} KB")
-        #print(f"Fig3:    {len(fig3_html)  / 1024:.1f} KB")
+            # Signal "processing"
+            shared_state.write(
+                cycle_number=cycle_number,
+                updating=True,
+                progress=0.0,
+                progress_msg=f"Processing {date}...",
+            )
+            
+            # Create display objects, extract HTML, and explicitly clean up
+            table_obj = TableData(cur)
+            table_html = table_obj.make_html_table()
+            del table_obj
+            
+            fig1_obj = TargetMap(1, cur)
+            fig1_html = fig1_obj.make_html_visits_map(0, "daily")
+            del fig1_obj
+            
+            fig2_obj = TargetTimeSeries(1, 0, cur)
+            fig2_html = fig2_obj.make_html_visits_plot(0, "daily")
+            del fig2_obj
+            
+            fig3_obj = ObservabilityData(1, 0, cur, date, flags_present)
+            fig3_html = fig3_obj.make_html_obs_plot()
+            del fig3_obj
+            
+            #print(f"Table:   {len(table_html) / 1024:.1f} KB")
+            #print(f"Fig1:    {len(fig1_html)  / 1024:.1f} KB")
+            #print(f"Fig2:    {len(fig2_html)  / 1024:.1f} KB")
+            #print(f"Fig3:    {len(fig3_html)  / 1024:.1f} KB")
 
-        # Explicitly delete display objects to free internal data structures
-        # (these objects hold large numpy arrays and DataFrames internally)
-        gc.collect()
+            # Explicitly delete display objects to free internal data structures
+            # (these objects hold large numpy arrays and DataFrames internally)
+            gc.collect()
 
-        # Atomically swap in the new data
-        shared_state.write(
-            date=date,
-            table=table_html,
-            fig1_html=fig1_html,
-            fig2_html=fig2_html,
-            fig3_html=fig3_html,
-            version=shared_state.snapshot()["version"] + 1,
-            updating=False,
-            progress=0.0,
-            next_update=time.time() + REFRESH_INTERVAL,
-            cycle_number=cycle_number,
-        )
+            # Atomically swap in the new data
+            shared_state.write(
+                date=date,
+                table=table_html,
+                fig1_html=fig1_html,
+                fig2_html=fig2_html,
+                fig3_html=fig3_html,
+                version=shared_state.snapshot()["version"] + 1,
+                updating=False,
+                progress=0.0,
+                next_update=time.time() + REFRESH_INTERVAL,
+                cycle_number=cycle_number,
+            )
 
-        print("============================")
-        print(f"Updated display for {date}")
-        print("============================")
+            print("============================")
+            print(f"Updated display for {date}")
+            print("============================")
 
-        if log_dir is not None and timestamp is not None:
-            monitoring_plots_display(log_dir, timestamp)
-        _reclaim_memory()
-        time.sleep(REFRESH_INTERVAL)
-        print(f"[CYCLE END #{cycle_number}]")
+            if log_dir is not None and timestamp is not None:
+                monitoring_plots_display(log_dir, timestamp)
+            _reclaim_memory()
+            time.sleep(REFRESH_INTERVAL)
+            print(f"[CYCLE END #{cycle_number}]")
+
+        except (psycopg2.OperationalError, psycopg2.ProgrammingError, IndexError) as e:
+            # Database connection lost, table doesn't exist, or no data available
+            print(f"\n[WARNING] Database access error: {e}")
+            print(f"[RETRY] Attempting to reconnect to database...")
+            print(f"[RETRY] Waiting {REFRESH_INTERVAL}s before retrying...\n")
+            
+            # Try to reconnect to database
+            try:
+                conn.close()
+            except:
+                pass  # Connection already closed
+            
+            try:
+                conn = psycopg2.connect(dbname=db_name)
+                cur = conn.cursor(cursor_factory=extras.DictCursor)
+                print(f"[RETRY] Successfully reconnected to database.")
+            except Exception as reconnect_error:
+                print(f"[RETRY] Failed to reconnect: {reconnect_error}")
+            
+            # Signal the error state to the frontend
+            shared_state.write(
+                updating=False,
+                progress_msg=f"Waiting for database... (retry {cycle_number + 1})",
+            )
+            
+            # Wait before retrying
+            time.sleep(REFRESH_INTERVAL)
+
+        except Exception as e:
+            # Catch any other unexpected errors and log them
+            print(f"\n[ERROR] Unexpected error in display loop: {type(e).__name__}: {e}")
+            print(f"[RETRY] Attempting to reconnect to database...")
+            print(f"[RETRY] Waiting {REFRESH_INTERVAL}s before retrying...\n")
+            
+            # Try to reconnect to database
+            try:
+                conn.close()
+            except:
+                pass  # Connection already closed
+            
+            try:
+                conn = psycopg2.connect(dbname=db_name)
+                cur = conn.cursor(cursor_factory=extras.DictCursor)
+                print(f"[RETRY] Successfully reconnected to database.")
+            except Exception as reconnect_error:
+                print(f"[RETRY] Failed to reconnect: {reconnect_error}")
+            
+            shared_state.write(
+                updating=False,
+                progress_msg=f"Error occurred, retrying...",
+            )
+            
+            time.sleep(REFRESH_INTERVAL)

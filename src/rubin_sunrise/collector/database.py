@@ -626,6 +626,15 @@ def set_up_db(db_name: str | None = None):
     if db_name is None:
         db_name = DB_NAME
 
+    # Terminate all active connections to the database before dropping it
+    terminate_sql = (
+        f"SELECT pg_terminate_backend(pg_stat_activity.pid) "
+        f"FROM pg_stat_activity "
+        f"WHERE pg_stat_activity.datname = '{db_name}' "
+        f"AND pid <> pg_backend_pid();"
+    )
+    subprocess.run(["psql", "-d", "postgres", "-c", terminate_sql])
+    
     subprocess.run(["dropdb", db_name])
     subprocess.run(["createdb", db_name])
     subprocess.run(["psql", "-d", db_name, "-f", "schema.sql"])
