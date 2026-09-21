@@ -127,7 +127,7 @@ def run_display(db_name: str | None = None) -> None:
     data_thread = threading.Thread(
         target=data_loop,
         args=(shared_state, conn, cur, DEFAULT_USER_ID, flags_present, 
-              run_dir, timestamp),
+              run_dir, timestamp, db_name),
         daemon=False,
     )
     data_thread.start()
