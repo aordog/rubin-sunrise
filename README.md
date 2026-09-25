@@ -28,11 +28,8 @@ Tested on Ubuntu 24.04.4 and 26.04.1 by Anna Ordog.
 1. Install via command line:
 
     `sudo apt install postgresql postgresql-contrib`
-2. Create a PostgreSQL user matching OS username, which lets you create or delete databases without being admin.
 
-    `sudo -u postgres createuser --createdb $(whoami)`
-
-3. For optimal compression of `BYTEA` table columns (used for 2D visits grids), PostgreSQL should be using `TOAST`, which may not be enabled by default. Edit the PostgreSQL config file if needed:
+2. For optimal compression of `BYTEA` table columns (used for 2D visits grids), PostgreSQL should be using `TOAST`, which may not be enabled by default. Edit the PostgreSQL config file if needed:
 
     `nano /etc/postgresql/<version>/main/postgresql.conf`
 
@@ -41,19 +38,61 @@ Tested on Ubuntu 24.04.4 and 26.04.1 by Anna Ordog.
     Then save the file and restart PostgreSQL:
     `sudo systemctl restart postgresql`
 
+3. Create a PostgreSQL user matching OS username, which lets you create or delete databases without being admin, and grant superuser, which is required for creating tablespaces where the databases can be stored:
+
+    `sudo -u postgres createuser --createdb $(whoami)`
+
+    `sudo -u postgres psql -c "ALTER USER $(whoami) WITH SUPERUSER;"`
+
+4. For every terminal session, set the password environment variable, OR add it to .bashrc:
+
+    `export PGPASSWORD="your_password"`
+
+    `echo 'export PGPASSWORD="your_password"' >> ~/.bashrc`
+
+    `source ~/.bashrc`
+    
+5. To allow for custom storage location of databases, create and prepare a directory (then update config.py file accordingly):
+
+    `sudo mkdir -p /var/lib/postgresql/custom_storage`
+
+    `sudo chown postgres:postgres /var/lib/postgresql/custom_storage`
+
+    `sudo chmod 700 /var/lib/postgresql/custom_storage`
+
+
+
 Verify basic functionality:
-1. Create a test database:
+1. After setting the password environment variable (if starting new session) create the tablespace. Note that only one tablespace can exist per custom storage location (see clean-up steps to remove existing tablespace and databases using them):
 
-    `createdb mydb`
+    `psql -h localhost -p 5432 -d postgres -c "CREATE TABLESPACE test_space LOCATION '/var/lib/postgresql/custom_storage';"`
 
-2. Connect to it:
+2. Create a test database in the tablespace (multiple databases can exist per tablespace):
 
-    `psql mydb`
+    `psql -h localhost -p 5432 -d postgres -c "CREATE DATABASE test_database TABLESPACE test_space;"`
 
-3. Quit `psql` using `\q`; delete the test database using `dropdb mydb`
+3. Connect to it, then exit:
+
+    `psql test_database`
+
+    `\q`
+
+4. Check what tablespace the database is in:
+
+    `psql -h localhost -p 5432 -d postgres -c " SELECT datname, spcname FROM pg_database LEFT JOIN pg_tablespace ON pg_database.dattablespace = pg_tablespace.oid WHERE datname = 'test_database';"`
+
+5. Check what databases are in a given tablespace:
+
+    `psql -h localhost -p 5432 -d postgres -c "SELECT datname, spcname FROM pg_database LEFT JOIN pg_tablespace ON pg_database.dattablespace = pg_tablespace.oid WHERE spcname = 'test_space';"`
+
+6. Clean up, first dropping all databases in the given tablespace:
+
+    `psql -h localhost -p 5432 -d postgres -t -c "SELECT 'DROP DATABASE IF EXISTS ' || datname || ';' FROM pg_database LEFT JOIN pg_tablespace ON pg_database.dattablespace = pg_tablespace.oid WHERE spcname = 'test_space'" | psql -h localhost -p 5432 -d postgres`
+
+    `psql -h localhost -p 5432 -d postgres -c "DROP TABLESPACE test_space;"`
 
 ### Mac OS:
-Tested on MacOS Tahoe 26.5.1 by Eric Wang
+Tested on MacOS Tahoe 26.5.1 by Eric Wang (likely incomplete for specifying locations to store database; Mac OS support may not be needed long term)
 1. Download and install from: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads. A password setup will be required during installation.
 2. Export the `psql` path, removing the decimal from the version number (e.g. 18.4->18):
 
@@ -89,13 +128,15 @@ Tested on MacOS Tahoe 26.5.1 by Eric Wang
 
 Set the following parameters in `config.py`:
 - `QUERY_FILE` - the input file with RA/dec coordinates of list of targets (code ships with 3 examples: `small_query.txt`, `medium_query.txt`, `large_query.txt`).
-- `QUERY_TYPE` - `SIM` to use simulated database; `RSV` to use Rubin Schedule Viewer (currently not available).
+- `QUERY_TYPE` - `SIM` to use simulated database; `RSV` to use Rubin Schedule Viewer; `local` to use downloaded version of RSV table.
 - `OUTPUT_BASE` - where you would like the log files to be stored (defaults to `logs` directory in the same directory as the codebase).
 - `REFRESH_INTERVAL` - cadence (in seconds) at which to simulate dates incrementing.
 - `SIM_HIST` - earliest date to include in historical population of the target list-specific database.
 - `SIM_START` - the simulated start date of the user query (must be later than `SIM_HIST`).
 - `SIM_END` - the simulated date on which to end updating the dashboard (must be later than `SIM_START`)
 - `DAYS_FORECAST` - the number of ahead days for which to calculate the observability of each target.
+- `PG_TABLESPACE_PATH` - optional custom tablespace directory (must exist, with permission correctly set)
+- `PG_TABLESPACE_NAME` - if using `PG_TABLESPACE_PATH`, the name of the custom tablespace
 
 **The following are the options for running the code like this:**
 
