@@ -42,6 +42,7 @@ from rubin_sunrise.observability import daily_observability, get_az_el
 import subprocess
 from rubin_sunrise.config import (
     DB_NAME, SIM_HIST, SIM_START, QUERY_TYPE, SIM_LSST_DB, DAYS_FORECAST, OBS_FLAGS,
+    PG_HOST, PG_PORT, PG_TABLESPACE_PATH, PG_TABLESPACE_NAME,
 )
 
 BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
@@ -606,7 +607,7 @@ def _insert_observability(cur, date, member_id, hrs):
     """, (date, member_id_value, hrs_value))
 
 
-def set_up_db(db_name: str | None = None):
+def set_up_db(db_name: str | None = None, host: str | None = None, port: int | None = None, tablespace_path: str | None = None):
     """Create and initialize the database schema for the user-specific table.
 
     Drops any existing database with the name specified, creates a 
@@ -616,15 +617,32 @@ def set_up_db(db_name: str | None = None):
     ----------
     db_name : str | None
         Database name. If None, uses default from config.
+    host : str | None
+        PostgreSQL server hostname. If None, uses PG_HOST from config.
+    port : int | None
+        PostgreSQL server port. If None, uses PG_PORT from config.
+    tablespace_path : str | None
+        Path to custom tablespace directory for storing database files.
+        If specified, creates tablespace if it doesn't exist and uses it for database.
+        If None, uses PostgreSQL default data directory.
 
     Notes
     -----
     This is a destructive operation. Use only for initialization.
     TO DO: for now this is being removed each time for a fresh start each time
     during testing. Will need to revisit how this is handled for final version.
+    
+    Creating a custom tablespace requires PostgreSQL superuser privileges.
+    Requires PostgreSQL authentication to be configured (set PGPASSWORD environment variable).
     """
     if db_name is None:
         db_name = DB_NAME
+    if host is None:
+        host = PG_HOST
+    if port is None:
+        port = PG_PORT
+    if tablespace_path is None:
+        tablespace_path = PG_TABLESPACE_PATH
 
     # Terminate all active connections to the database before dropping it
     terminate_sql = (
@@ -633,11 +651,43 @@ def set_up_db(db_name: str | None = None):
         f"WHERE pg_stat_activity.datname = '{db_name}' "
         f"AND pid <> pg_backend_pid();"
     )
-    subprocess.run(["psql", "-d", "postgres", "-c", terminate_sql])
+    subprocess.run(["psql", "-h", host, "-p", str(port), "-d", "postgres", "-c", terminate_sql])
     
-    subprocess.run(["dropdb", db_name])
-    subprocess.run(["createdb", db_name])
-    subprocess.run(["psql", "-d", db_name, "-f", "schema.sql"])
+    # Drop existing database
+    subprocess.run(["dropdb", "-h", host, "-p", str(port), db_name])
+    
+    # If custom tablespace path is specified, create tablespace if it doesn't exist
+    if tablespace_path:
+        # Create the tablespace directory if it doesn't exist (may require sudo)
+        tablespace_dir = Path(tablespace_path)
+        if not tablespace_dir.exists():
+            print(f"Note: Tablespace directory {tablespace_path} does not exist.")
+            print(f"You may need to create it with: sudo mkdir -p {tablespace_path}")
+            print(f"And set permissions: sudo chown postgres:postgres {tablespace_path} && sudo chmod 700 {tablespace_path}")
+        
+        # Check if tablespace already exists; if not, create it
+        check_tablespace_sql = f"SELECT spcname FROM pg_tablespace WHERE spcname = '{PG_TABLESPACE_NAME}';"
+        result = subprocess.run(
+            ["psql", "-h", host, "-p", str(port), "-d", "postgres", "-t", "-c", check_tablespace_sql],
+            capture_output=True,
+            text=True
+        )
+        
+        if not result.stdout.strip():  # Tablespace doesn't exist
+            create_tablespace_sql = f"CREATE TABLESPACE {PG_TABLESPACE_NAME} LOCATION '{tablespace_path}';"
+            subprocess.run(
+                ["psql", "-h", host, "-p", str(port), "-d", "postgres", "-c", create_tablespace_sql]
+            )
+            print(f"Created tablespace {PG_TABLESPACE_NAME} at {tablespace_path}")
+        
+        # Create database with tablespace using SQL (createdb CLI doesn't properly handle -T flag)
+        create_db_sql = f"CREATE DATABASE {db_name} TABLESPACE {PG_TABLESPACE_NAME};"
+        subprocess.run(["psql", "-h", host, "-p", str(port), "-d", "postgres", "-c", create_db_sql])
+    else:
+        # Create database with default tablespace
+        subprocess.run(["createdb", "-h", host, "-p", str(port), db_name])
+    
+    subprocess.run(["psql", "-h", host, "-p", str(port), "-d", db_name, "-f", "schema.sql"])
     return
 
 
@@ -703,7 +753,8 @@ def initialize_tracking(user_id, file_in, declim, db_name: str | None = None):
     list_grouped = _group_targets(ra_t_list, dec_t_list, 32)
 
     # Open a connection to database
-    conn = psycopg2.connect(dbname=db_name)
+    # Always specify host and port for explicit PostgreSQL control (requires PGPASSWORD env var)
+    conn = psycopg2.connect(dbname=db_name, host=PG_HOST, port=PG_PORT)
 
     # Use a DictCursor to safely specify columns later
     cur = conn.cursor(cursor_factory=extras.DictCursor)

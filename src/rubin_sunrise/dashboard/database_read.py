@@ -28,6 +28,7 @@ from rubin_sunrise.observability import daily_observability, get_az_el
 import subprocess
 from rubin_sunrise.config import (
     DB_NAME, SIM_HIST, SIM_START, QUERY_TYPE, SIM_LSST_DB, DAYS_FORECAST, OBS_FLAGS,
+    PG_HOST, PG_PORT,
 )
 
 BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
@@ -74,7 +75,8 @@ def get_database(db_name: str | None = None):
         db_name = DB_NAME
 
     # Open a connection to database
-    conn = psycopg2.connect(dbname=db_name)
+    # Always specify host and port for explicit PostgreSQL control (requires PGPASSWORD env var)
+    conn = psycopg2.connect(dbname=db_name, host=PG_HOST, port=PG_PORT)
 
     # Use a DictCursor to safely specify columns later
     cur = conn.cursor(cursor_factory=extras.DictCursor)
