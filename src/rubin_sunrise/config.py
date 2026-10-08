@@ -22,8 +22,10 @@ OBS_FLAGS      = False            # Additional observability flags available
 PORT = 8000 # Server
 DEFAULT_USER_ID: int  = 1  # User ID. TO DO: REVISIT WHEN ADDING USERS!
 DB_NAME = "lsst_database"  # Name of user-specific database
-CLOCK_DB_NAME = "rubin_clock"  # Name of shared clock database (independent of user DBs)
 OUTPUT_BASE = Path(__file__).parent.parent.parent
+
+# Logging configuration
+ENABLE_CONSOLE_OUTPUT = True  # Set to False for production (silent console, logs still written to file)
 
 # PostgreSQL connection settings
 PG_HOST = "localhost"  # PostgreSQL server hostname (default: localhost for local development)

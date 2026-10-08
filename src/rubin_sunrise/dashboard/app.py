@@ -14,6 +14,7 @@ thread-safe read access to the current dashboard state.
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -24,6 +25,8 @@ from flask import Flask, jsonify, render_template, request
 from rubin_sunrise.dashboard.displays import TargetMap, TargetTimeSeries, ObservabilityData
 if TYPE_CHECKING:
     from rubin_sunrise.dashboard.state import SharedState
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(
@@ -175,7 +178,7 @@ def create_app(
         mn      = int(data["mn"])
         maptype = data.get("maptype", "daily")
         date    = shared_state.snapshot()["date"]
-        print(
+        logger.info(
             f"Row {data['index']} clicked "
             f"(maptype={maptype}, group:{gn}, member:{mn})"
         )
@@ -210,7 +213,7 @@ def create_app(
         mn      = int(data["mn"])
         maptype = data["maptype"]
         date    = shared_state.snapshot()["date"]
-        print(
+        logger.info(
             f"Map type {maptype} clicked "
             f"(row={data.get('index', 0)}, group:{gn}, member:{mn})"
         )

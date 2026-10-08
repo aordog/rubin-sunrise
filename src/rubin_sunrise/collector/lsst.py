@@ -19,10 +19,13 @@ Public API
 
 import numpy as np
 import pandas as pd
+import logging
 import requests
 import sqlite3
 import psycopg2
 from psycopg2 import extras
+
+logger = logging.getLogger(__name__)
 
 from rubin_sunrise.config import SIM_LSST_DB
 
@@ -93,8 +96,6 @@ def _em_min_max_to_band(em_min, em_max):
     for b in band_dict.keys():
         if em_min > band_dict[b][0] and em_max < band_dict[b][1]:
             band = b
-    #if band is None:
-    #    print(em_min, em_max, ' no band found')
 
     return band
 
@@ -141,8 +142,8 @@ def rsv_service(date: str) -> pd.DataFrame:
     assert response.status_code == 200, (
         f"request failed with status {response.status_code}"
     )
-    print(f"Rubin Schedule Forecast at {response.url} is alive.")
-    print(response.url)
+    logger.info(f"Rubin Schedule Forecast at {response.url} is alive.")
+    logger.debug(f"RSV URL: {response.url}")
 
     # Calculate bands using RSP function and add this to dataframe:
     visits = pd.DataFrame(response.json())
@@ -183,7 +184,7 @@ def rsv_local(date: str, db_name: str) -> pd.DataFrame:
 
     """
 
-    print(db_name)
+    logger.debug(f"Querying RSV database: {db_name}")
     conn = psycopg2.connect(dbname=db_name)
     cur = conn.cursor(cursor_factory=extras.DictCursor)
 
@@ -194,7 +195,6 @@ def rsv_local(date: str, db_name: str) -> pd.DataFrame:
 
     columns = [desc[0] for desc in cur.description]
     visits = pd.DataFrame(cur.fetchall(), columns=columns)
-    #print(visits)
     cur.close()
     conn.close() 
 
@@ -385,7 +385,6 @@ def get_visit_metadata(visits,
     ra = np.array(visits["s_ra"])
     dec = np.array(visits["s_dec"])
     status = np.array(visits["execution_status"])
-    #obs_id = visits["obs_id"]
 
     idxs = _target_visits_idxs(ra_t, dec_t, r, ra, dec, status)
 
@@ -416,7 +415,7 @@ def get_camera():
     """
     from rubin_scheduler.utils import (LsstCameraFootprint,
                                        _angular_separation)
-    print('Getting camera')
+    logger.debug('Loading LSST camera footprint')
     camera = LsstCameraFootprint(units='degrees',
                                  footprint_file='fov_map.npz')
 

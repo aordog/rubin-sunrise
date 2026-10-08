@@ -20,6 +20,7 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import gc
+import logging
 import time
 from typing import TYPE_CHECKING
 from astropy.time import Time
@@ -50,6 +51,8 @@ from psycopg2 import extras
 
 if TYPE_CHECKING:
     from rubin_sunrise.dashboard.state import SharedState
+
+logger = logging.getLogger(__name__)
 
 # C-level memory reclamation (glibc-specific; unavailable on macOS/Windows):
 _libc = None
@@ -195,21 +198,21 @@ def data_loop(
                 cycle_number=cycle_number,
             )
 
-            print("============================")
-            print(f"Updated display for {date}")
-            print("============================")
+            logger.info("=============================")
+            logger.info(f"Updated display for {date}")
+            logger.info("=============================")
 
             if log_dir is not None and timestamp is not None:
                 monitoring_plots_display(log_dir, timestamp)
             _reclaim_memory()
             time.sleep(REFRESH_INTERVAL)
-            print(f"[CYCLE END #{cycle_number}]")
+            logger.info(f"[CYCLE END #{cycle_number}]")
 
         except (psycopg2.OperationalError, psycopg2.ProgrammingError, IndexError) as e:
             # Database connection lost, table doesn't exist, or no data available
-            print(f"\n[WARNING] Database access error: {e}")
-            print(f"[RETRY] Attempting to reconnect to database...")
-            print(f"[RETRY] Waiting {REFRESH_INTERVAL}s before retrying...\n")
+            logger.warning(f"Database access error: {e}")
+            logger.warning(f"Attempting to reconnect to database...")
+            logger.warning(f"Waiting {REFRESH_INTERVAL}s before retrying...")
             
             # Try to reconnect to database
             try:
@@ -220,9 +223,9 @@ def data_loop(
             try:
                 conn = psycopg2.connect(dbname=db_name)
                 cur = conn.cursor(cursor_factory=extras.DictCursor)
-                print(f"[RETRY] Successfully reconnected to database.")
+                logger.warning(f"Successfully reconnected to database.")
             except Exception as reconnect_error:
-                print(f"[RETRY] Failed to reconnect: {reconnect_error}")
+                logger.warning(f"Failed to reconnect: {reconnect_error}")
             
             # Signal the error state to the frontend
             shared_state.write(
@@ -235,9 +238,9 @@ def data_loop(
 
         except Exception as e:
             # Catch any other unexpected errors and log them
-            print(f"\n[ERROR] Unexpected error in display loop: {type(e).__name__}: {e}")
-            print(f"[RETRY] Attempting to reconnect to database...")
-            print(f"[RETRY] Waiting {REFRESH_INTERVAL}s before retrying...\n")
+            logger.error(f"Unexpected error in display loop: {type(e).__name__}: {e}")
+            logger.warning(f"Attempting to reconnect to database...")
+            logger.warning(f"Waiting {REFRESH_INTERVAL}s before retrying...")
             
             # Try to reconnect to database
             try:
@@ -248,9 +251,9 @@ def data_loop(
             try:
                 conn = psycopg2.connect(dbname=db_name)
                 cur = conn.cursor(cursor_factory=extras.DictCursor)
-                print(f"[RETRY] Successfully reconnected to database.")
+                logger.warning(f"Successfully reconnected to database.")
             except Exception as reconnect_error:
-                print(f"[RETRY] Failed to reconnect: {reconnect_error}")
+                logger.warning(f"Failed to reconnect: {reconnect_error}")
             
             shared_state.write(
                 updating=False,

@@ -9,69 +9,11 @@ ultimately go instead of generic 'utilities'
 **Author:** Anna Ordog
 """
 
-import numpy as np
-import healpy as hp
 from datetime import datetime, timedelta
 from astropy.time import Time
 import sqlite3
 
-#BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
-#MASK_COLS = [f'{b}mask' for b in BANDS]
-#VISIT_COLS = [f'{b}visits' for b in BANDS]
 
-'''
-def remove_high_dec(ra_in, dec_in, dec_lim):
-    """Filter out sources above a declination limit.
-
-    Removes coordinates from input arrays where declination exceeds the
-    specified limit. Used to exclude sources in the far north from example
-    source catalogs to roughly match Rubin Observatory's observing footprint.
-
-    Parameters
-    ----------
-    ra_in : array-like
-        Right ascension values in degrees.
-    dec_in : array-like
-        Declination values in degrees.
-    dec_lim : float
-        Declination limit in degrees. Sources with dec >= dec_lim are removed.
-
-    Returns
-    -------
-    tuple[ndarray, ndarray]
-        Filtered (ra, dec) arrays containing only sources with dec < dec_lim.
-    """
-    return ra_in[dec_in<dec_lim], dec_in[dec_in<dec_lim]
-
-def make_fake_src_list(nside, declim):
-    """Generate fake source catalog using HEALPix tessellation.
-
-    Creates a uniform source catalog by placing one source at each HEALPix
-    pixel center at a given resolution level. Sources above the declination
-    limit are removed to match the Rubin Observatory observing footprint.
-    Used for prototyping the dashboard with uniform sky coverage of targets.
-
-    Parameters
-    ----------
-    nside : int
-        HEALPix resolution parameter (must be power of 2). Higher values
-        create denser source catalogs.
-    declim : float
-        Declination limit in degrees. Sources with dec >= declim are excluded.
-
-    Returns
-    -------
-    tuple[ndarray, ndarray]
-        (RA, Dec) coordinates in degrees for all HEALPix pixels below declim.
-    """
-    idx_list = np.arange(0,hp.nside2npix(nside))
-
-    ra, dec = hp.pix2ang(nside, idx_list, lonlat=True)
-
-    return remove_high_dec(ra.astype(float), 
-                           dec.astype(float), declim)
-
-'''
 
 def simulation_dates(sim_start: datetime, sim_end: datetime) -> list[str]:
     """Generate list of simulated survey dates.

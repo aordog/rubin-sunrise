@@ -21,6 +21,7 @@ from rubin_sunrise.config import (
     OUTPUT_BASE,
     PORT,
     DB_NAME,
+    ENABLE_CONSOLE_OUTPUT,
 )
  
 
@@ -30,11 +31,12 @@ from rubin_sunrise.dashboard.runner import data_loop
 from rubin_sunrise.dashboard.app import create_app
 from rubin_sunrise.monitoring import ( 
                                     monitor_resources, 
-                                    QuietFilter,
-                                    Logger)
+                                    QuietFilter)
 
 # Resolve project root (…/src/rubin_sunrise/__main__.py  →  …/)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+logger = logging.getLogger(__name__)
 
 
 def run_display(db_name: str | None = None) -> None:
@@ -99,9 +101,49 @@ def run_display(db_name: str | None = None) -> None:
     run_dir = OUTPUT_BASE / 'logs' / 'display_logs' / timestamp
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = open(run_dir / f"log_{timestamp}.txt", "w")
-    sys.stdout = Logger(sys.stdout, log_file)
-    sys.stderr = Logger(sys.stderr, log_file)
+    # Configure unified logging for all rubin_sunrise modules
+    # Custom formatter that strips the redundant 'rubin_sunrise.' prefix
+    class CondensedFormatter(logging.Formatter):
+        def format(self, record):
+            # Remove 'rubin_sunrise.' prefix from logger name
+            if record.name.startswith('rubin_sunrise.'):
+                record.name = record.name[len('rubin_sunrise.'):]
+            return super().format(record)
+    
+    # Unified format for both console and file (consistency)
+    log_formatter = CondensedFormatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    
+    # File handler - always write DEBUG and above
+    file_handler = logging.FileHandler(run_dir / f"log_{timestamp}.txt")
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(log_formatter)
+    
+    # Console handler - conditional based on ENABLE_CONSOLE_OUTPUT
+    console_handler = None
+    if ENABLE_CONSOLE_OUTPUT:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.DEBUG)  # Full DEBUG level for development
+        console_handler.setFormatter(log_formatter)
+    
+    # Configure root logger to WARNING to suppress third-party debug spam
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.WARNING)
+    root_logger.addHandler(file_handler)
+    if console_handler:
+        root_logger.addHandler(console_handler)
+    
+    # Configure rubin_sunrise loggers to DEBUG level (only affects our code)
+    rubin_logger = logging.getLogger('rubin_sunrise')
+    rubin_logger.setLevel(logging.DEBUG)
+    
+    # Suppress third-party debug messages
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    logging.getLogger('astropy').setLevel(logging.WARNING)
+    logging.getLogger('psycopg2').setLevel(logging.WARNING)
+    logging.getLogger('werkzeug').addFilter(QuietFilter())
 
     conn, cur, flags_present = get_database(db_name=db_name)
 
@@ -144,17 +186,16 @@ def run_display(db_name: str | None = None) -> None:
 
     # ── Serve ───────────────────────────────────────────────────
     try:
-        print('Starting display update...')
+        logger.info('Starting display update...')
         # Wait for data collection to complete all cycles
         app.run(port=PORT)
-        print('Display update complete.')
+        logger.info('Display update complete.')
     except KeyboardInterrupt:
-        print('\nShutdown requested by user.')
+        logger.info('Shutdown requested by user.')
     finally:
         # Signal monitor thread to stop and clean up
         stop_monitor.set()
         monitor_thread.join(timeout=10)
-        log_file.close()
 
 
 if __name__ == "__main__":

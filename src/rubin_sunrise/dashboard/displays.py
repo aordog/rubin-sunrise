@@ -14,6 +14,7 @@ Public API
 
 **Author:** Anna Ordog, for CanDIAPL
 """
+import logging
 import pandas as pd
 import numpy as np
 from plotly.subplots import make_subplots
@@ -26,6 +27,8 @@ from datetime import timedelta
 
 from rubin_sunrise.config import VERBOSE, DAYS_FORECAST
 from rubin_sunrise.observability import el_vs_time
+
+logger = logging.getLogger(__name__)
 
 BANDS = ('u', 'g', 'r', 'i', 'z', 'y')
 MASK_COLS = [f'{b}mask' for b in BANDS]
@@ -405,9 +408,6 @@ def _make_html_visits_plot(data, idx_mem, maptype):
     """
     fig = make_subplots(rows=1, cols=1,specs=[[{"type": "scatter"}]])
     title = f"<b>RA = {data['ra_mem'][idx_mem]:.5f}&deg;, dec = {data['dec_mem'][idx_mem]:.5f}&deg;</b>"
-    #print('++++++++++++++++++++++++++++')
-    #print(title)
-    #print('++++++++++++++++++++++++++++')
     fig.update_layout(title=dict(text=title, x=0.5, xanchor="center"))
 
     # Get colors from seaborn's colorblind palette with specific indices for better distinction
@@ -516,8 +516,8 @@ def _populate_observability(gid, idx_mem, cur, date, flags_present):
         for row in rows:
             #flip flag sign to allow filtering by multiplication
             flags.append(1 - row['obs_flag']) 
-        print(len(data['hours']))
-        print(len(flags))
+        logger.debug(f"hours data length: {len(data['hours'])}")
+        logger.debug(f"flags data length: {len(flags)}")
         data['hours'] = data['hours'] * np.array(flags)
 
     return data

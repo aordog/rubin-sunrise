@@ -19,12 +19,15 @@ Public API
 import pandas as pd
 import healpy as hp
 import numpy as np
+import logging
 import psycopg2
 from psycopg2 import extras
 from datetime import timedelta, datetime
 from dateutil.parser import parse
 import csv
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from rubin_sunrise.collector.utils import (
     simulation_dates, 
     get_base_mjd,
@@ -86,14 +89,12 @@ def _read_csv_file(file_in, declim):
     ra_name  = str(lines[0].strip().split(sep=dialect.delimiter)[index_ra])
     dec_name = str(lines[0].strip().split(sep=dialect.delimiter)[index_dec])
 
-    print('=====================================================')
-    print(f'Reading input file with:')
-    print(f'RA column = {ra_name}')
-    print(f'dec column = {dec_name}')
-    print(f'Column delimiters = {dialect.delimiter}')
+    logger.info('=====================================================')
+    logger.info(f'Reading input file with:')
+    logger.info(f'RA column = {ra_name}')
+    logger.info(f'dec column = {dec_name}')
+    logger.info(f'Column delimiters = {dialect.delimiter}')
 
-    #header_idx = next(i for i, line in enumerate(lines) if line.startswith('No.'))
-    #header_idx = next(i for i, line in enumerate(lines) if 'ra' in line.lower())
     header_idx = 0 # assuming no lines to skip before header for now
 
     df = pd.read_csv(file_path,
@@ -106,9 +107,8 @@ def _read_csv_file(file_in, declim):
     ra_use  = df[ra_name].values.astype(float)[dec_in < declim]
     dec_use = df[dec_name].values.astype(float)[dec_in < declim]
 
-    print(f'Warning: {len(df) - len(ra_use)} input targets are excluded '
-          '(outside of the observable dec range of Rubin)')      
-    print(' ')
+    logger.warning(f'Warning: {len(df) - len(ra_use)} input targets are excluded '
+                   '(outside of the observable dec range of Rubin)')
 
     if OBS_FLAGS:
         all_flags = _get_obs_flags(df)
@@ -121,7 +121,7 @@ def _read_csv_file(file_in, declim):
 
 def _get_obs_flags(df):
 
-    print('Reading user-defined observability flags')
+    logger.info('Reading user-defined observability flags')
     all_flags = {}
 
     for header in list(df):
@@ -178,8 +178,7 @@ def _group_targets(ra_list, dec_list, nside):
     pixel_ids = hp.ang2pix(nside, ra_list, dec_list, lonlat=True)
     idx_filled = np.unique(pixel_ids)
     pixel_res = hp.nside2resol(nside)
-    print('*********************')
-    print(pixel_res*180/np.pi)
+    logger.debug(f'HEALPix pixel resolution in degrees: {pixel_res*180/np.pi}')
 
     groups = []
     for idx in idx_filled:
@@ -573,7 +572,6 @@ def _insert_obs_flags(cur, date, member_id, flag):
 
     # Convert numpy types to native Python types for database compatibility
     member_id_value = int(member_id) if isinstance(member_id, (np.integer, np.int64)) else member_id
-    #hrs_value = float(hrs) if isinstance(hrs, (np.floating, np.integer)) else hrs
     flag_values = int(flag)
 
     cur.execute(f"""
@@ -661,9 +659,9 @@ def set_up_db(db_name: str | None = None, host: str | None = None, port: int | N
         # Create the tablespace directory if it doesn't exist (may require sudo)
         tablespace_dir = Path(tablespace_path)
         if not tablespace_dir.exists():
-            print(f"Note: Tablespace directory {tablespace_path} does not exist.")
-            print(f"You may need to create it with: sudo mkdir -p {tablespace_path}")
-            print(f"And set permissions: sudo chown postgres:postgres {tablespace_path} && sudo chmod 700 {tablespace_path}")
+            logger.warning(f"Note: Tablespace directory {tablespace_path} does not exist.")
+            logger.warning(f"You may need to create it with: sudo mkdir -p {tablespace_path}")
+            logger.warning(f"And set permissions: sudo chown postgres:postgres {tablespace_path} && sudo chmod 700 {tablespace_path}")
         
         # Check if tablespace already exists; if not, create it
         check_tablespace_sql = f"SELECT spcname FROM pg_tablespace WHERE spcname = '{PG_TABLESPACE_NAME}';"
@@ -678,7 +676,7 @@ def set_up_db(db_name: str | None = None, host: str | None = None, port: int | N
             subprocess.run(
                 ["psql", "-h", host, "-p", str(port), "-d", "postgres", "-c", create_tablespace_sql]
             )
-            print(f"Created tablespace {PG_TABLESPACE_NAME} at {tablespace_path}")
+            logger.info(f"Created tablespace {PG_TABLESPACE_NAME} at {tablespace_path}")
         
         # Create database with tablespace using SQL (createdb CLI doesn't properly handle -T flag)
         create_db_sql = f"CREATE DATABASE {db_name} TABLESPACE {PG_TABLESPACE_NAME};"
@@ -744,10 +742,7 @@ def initialize_tracking(user_id, file_in, declim, db_name: str | None = None):
     # Read in the target list:
     ra_t_list, dec_t_list, all_flags = _read_csv_file(file_in, declim)
 
-    print('====================================================')
-    print('')
-    print(f"Starting code for {len(ra_t_list)} input targets...")
-    print('')
+    logger.info(f"Starting initialization for {len(ra_t_list)} input targets...")
 
     # Group the targets from the list
     list_grouped = _group_targets(ra_t_list, dec_t_list, 32)
@@ -762,7 +757,7 @@ def initialize_tracking(user_id, file_in, declim, db_name: str | None = None):
     # Check whether targets have already been loaded into this user's table
     cur.execute("SELECT COUNT(*) FROM groups WHERE user_id = %s", (user_id,))
     if cur.fetchone()[0] > 0:
-        print("Targets already loaded for this user. Skipping.")
+        logger.debug("Targets already loaded for this user. Skipping.")
     else:
         # Load the grouped targets into the tables
         _setup_targets(conn, user_id, list_grouped)
@@ -771,18 +766,12 @@ def initialize_tracking(user_id, file_in, declim, db_name: str | None = None):
     camera = get_camera()
 
     if all_flags:
-        print('*******************')
+        logger.info("Populating database with user-defined observability flags")
         flags_present = True
-        print('Populating database with user-defined observability flags')
         for date in all_flags.keys():
             populate_obs_flags(conn, cur, user_id, date, all_flags[date])
-
-        print('*******************')
     else:
         flags_present = False
-
-    print('')
-    print('====================================================')
 
     return camera, conn, cur, flags_present
 
@@ -893,7 +882,7 @@ def populate_obs_flags(conn, cur, user_id, date, flags):
         Date string (YYYY-MM-DD) for observability calculation.
     """
 
-    print(f'Populating user-defined observability for {date}')
+    logger.info(f'Populating user-defined observability for {date}')
 
     # Query all members for this user directly, joining with groups table
     # to filter by user_id:
@@ -937,7 +926,7 @@ def populate_forecast(conn, cur, user_id, date, shared_state=None):
         Thread-safe state container (not currently used).
     """
 
-    print(f'Populating observability for {date}')
+    logger.info(f'Populating observability for {date}')
 
     # Query all members for this user directly, joining with groups table
     # to filter by user_id:
@@ -996,7 +985,7 @@ def populate_history(conn, cur, camera, user_id):
 
     if QUERY_TYPE == 'SIM':
         base_mjd = get_base_mjd(SIM_LSST_DB)
-        print(f"Querying simulated LSST data base: {SIM_LSST_DB}")
+        logger.info(f"Querying simulated LSST data base: {SIM_LSST_DB}")
         
         # Fetch all observations for the entire date range in one query
         min_date = SIM_HIST
@@ -1004,12 +993,12 @@ def populate_history(conn, cur, camera, user_id):
         min_night = date_to_nightnum(min_date, base_mjd)
         max_night = date_to_nightnum(max_date, base_mjd)
         
-        print(f"Fetching all observations from night {min_night} to {max_night}...")
+        logger.info(f"Fetching all observations from night {min_night} to {max_night}...")
         visits_by_night = sim_service_range(min_night, max_night)
-        print(f"Loaded {len(visits_by_night)} nights of observation data.")
+        logger.info(f"Loaded {len(visits_by_night)} nights of observation data.")
     
     if QUERY_TYPE == 'RSV':
-        print(f"Querying Rubin Schedule Viewer")
+        logger.info(f"Querying Rubin Schedule Viewer")
 
     cycle_number = 0
     for date in simulation_dates(SIM_HIST, SIM_START-timedelta(days=1)):
@@ -1018,22 +1007,22 @@ def populate_history(conn, cur, camera, user_id):
         # Reading in data with simulated database option 
         if QUERY_TYPE == 'SIM':
             nightnum = date_to_nightnum(date, base_mjd)
-            print(f"[CYCLE START #{cycle_number}] {date}, night #{nightnum}")
+            logger.info(f"[CYCLE START #{cycle_number}] {date}, night #{nightnum}")
             visits = visits_by_night.get(nightnum, pd.DataFrame())
 
         # Reading in data with RSV option    
         if QUERY_TYPE == 'RSV':
-            print(f"[CYCLE START #{cycle_number}] {date}")
+            logger.info(f"[CYCLE START #{cycle_number}] {date}")
             visits = rsv_service(date)
 
         # Reading in data with local copy of RSV option    
         if QUERY_TYPE == 'Local':
-            print(f"[CYCLE START #{cycle_number}] {date}")
-            print('+++++ Attempting history with Local Copy!!!+++++')
+            logger.info(f"[CYCLE START #{cycle_number}] {date}")
+            logger.debug("Attempting history with Local Copy")
             visits = rsv_local(date, "local_rsv")
 
         if visits.empty:
-            print(f"DATA MISSING for {date}")
+            logger.warning(f"DATA MISSING for {date}")
         else:
             populate_database(conn, cur, camera, user_id, visits, date)
 
