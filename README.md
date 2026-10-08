@@ -163,6 +163,8 @@ rubin-sunrise/
 │        ├── config.py         # parameters and tunables
 │        ├── observability.py  # functions for forecasting plots
 │        ├── monitoring.py     # memory/CPU usage monitoring/stress tests
+│        ├── rsv/
+│        │       └── rsv_main.py       # for populating local copy of RSV
 │        ├── collector/
 │        │       ├── __init__.py
 │        │       ├── collector_main.py # entry point for data collection
@@ -190,13 +192,19 @@ rubin-sunrise/
 ├── docs/                      # INCOMPLETE
 ├── tests/
 │    ├── test_app.py
+│    ├── test_collector.py
+│    ├── test_dashboard_main.py
 │    ├── test_database.py
 │    ├── test_lsst.py
+│    ├── test_monitoring.py
 │    ├── test_observability.py
-│    ├── test_comet.py        
+│    ├── test_pipeline.py
+│    ├── test_comet.py
+│    ├── test_utils.py        
 │    └── test_rsv_2026-05-16.csv         
 ├── logs/                      # log files, plots of memory/CPU usage monitoring
 ├── schema.sql                 # PostgreSQL database schema to store user targets
+├── schema_rsv.sql             # PostgreSQL database schema for local copy of RSV
 ├── small_query.txt            # 80 example targets above dec=0
 ├── medium_query.txt           # 663 example targets above dec=0
 ├── large_query.txt            # 1421 example targets above dec=0

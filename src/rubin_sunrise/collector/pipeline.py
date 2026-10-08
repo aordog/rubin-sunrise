@@ -18,10 +18,13 @@ from __future__ import annotations
 import ctypes
 import ctypes.util
 import gc
+import logging
 import time
 from typing import TYPE_CHECKING
 from astropy.time import Time
 from datetime import timedelta, datetime
+
+logger = logging.getLogger(__name__)
 
 from rubin_sunrise.config import (
     REFRESH_INTERVAL, 
@@ -53,8 +56,6 @@ from rubin_sunrise.monitoring import (
     monitoring_plots_collector,
 )
 
-print(f"DEBUG: Using pipeline from {__file__}")
-
 # C-level memory reclamation (glibc-specific; unavailable on macOS/Windows):
 _libc = None
 _has_malloc_trim = False
@@ -81,9 +82,9 @@ def _reclaim_memory() -> None:
     
     if _has_malloc_trim:
         result = _libc.malloc_trim(0)
-        print(f"[MEMORY] gc.collect() freed {collected} objects, malloc_trim returned {result}")
+        logger.debug(f"gc.collect() freed {collected} objects, malloc_trim returned {result}")
     else:
-        print(f"[MEMORY] gc.collect() freed {collected} objects (malloc_trim not available)")
+        logger.debug(f"gc.collect() freed {collected} objects (malloc_trim not available)")
 
 
 # The main data loop:
@@ -132,12 +133,11 @@ def data_loop(
 
     if QUERY_TYPE == 'SIM':
         base_mjd = get_base_mjd(SIM_LSST_DB)
-        print(f"Querying simulated LSST data base: {SIM_LSST_DB}")
+        logger.info(f"Querying simulated LSST data base: {SIM_LSST_DB}")
     if QUERY_TYPE == 'RSV':
-        print(f"Querying Rubin Schedule Viewer")
+        logger.info(f"Querying Rubin Schedule Viewer")
     if QUERY_TYPE == 'Local':
-        print(f"Querying local copy of Rubin Schedule Viewer")
-    print('=====================================================')
+        logger.info(f"Querying local copy of Rubin Schedule Viewer")
 
     cycle_number = 0
     for date in simulation_dates(SIM_START, SIM_END):
@@ -147,22 +147,22 @@ def data_loop(
         # Reading in data with simulated database option 
         if QUERY_TYPE == 'SIM':
             nightnum = date_to_nightnum(date, base_mjd)
-            print(f"[CYCLE START #{cycle_number}] {date}, night #{nightnum}")
+            logger.info(f"[CYCLE START #{cycle_number}] {date}, night #{nightnum}")
             visits = sim_service(nightnum)
 
         # Reading in data with RSV option    
         if QUERY_TYPE == 'RSV':
-            print(f"[CYCLE START #{cycle_number}] {date}")
+            logger.info(f"[CYCLE START #{cycle_number}] {date}")
             visits = rsv_service(date)
 
         # Reading in data with local copy of RSV option    
         if QUERY_TYPE == 'Local':
-            print(f"[CYCLE START #{cycle_number}] {date}")
-            print('+++++ Attempting Local Copy!!!+++++')
+            logger.info(f"[CYCLE START #{cycle_number}] {date}")
+            logger.debug("Attempting Local Copy")
             visits = rsv_local(date, "local_rsv")
 
         if visits.empty:
-            print(f"DATA MISSING for {date}")
+            logger.warning(f"DATA MISSING for {date}")
         else:     
             populate_database(
                     conn, cur, camera, user_id, visits, date, 
@@ -172,10 +172,7 @@ def data_loop(
                               str(Time(date)+timedelta(days=DAYS_FORECAST)), 
                               shared_state=None)
             gc.collect()
-
-            print("============================")
-            print(f"Updated data for {date}")
-            print("============================")
+            logger.info(f"Updated data for {date}")
 
         if log_dir is not None and timestamp is not None:
             log_table_size(cur, str(log_dir / f"table_size_{timestamp}.csv"), db_name=db_name)
@@ -185,4 +182,4 @@ def data_loop(
         while Time(now) < Time(tstart)+timedelta(seconds=REFRESH_INTERVAL):
             now = datetime.now()
             time.sleep(1)
-        print(f"[CYCLE END #{cycle_number}]")
+        logger.info(f"[CYCLE END #{cycle_number}]")

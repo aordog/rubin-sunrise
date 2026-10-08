@@ -169,7 +169,8 @@ def _read_log(dir_files, file_time, search_string):
     """Extract timestamps from log file matching search string.
 
     Parses a log file and returns a list of timestamps extracted from
-    lines containing the specified search string.
+    lines containing the specified search string. Handles the new logging
+    format which includes ISO-formatted timestamps.
 
     Parameters
     ----------
@@ -185,11 +186,19 @@ def _read_log(dir_files, file_time, search_string):
     list[str]
         List of timestamp strings extracted from matching lines.
     """
+    import re
     ts = []
+    # Pattern to match ISO-formatted timestamps (YYYY-MM-DD HH:MM:SS)
+    timestamp_pattern = r'(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'
+    
     with open(f"{dir_files}/log_{file_time}.txt", 'r') as file:
         for line in file:
             if search_string in line:
-                ts.append(line.strip().split()[0][1::]+" "+line.strip().split()[1][0:-1])
+                # Extract all timestamps from the line
+                matches = re.findall(timestamp_pattern, line)
+                if matches:
+                    # Use the first timestamp found (from logging module, not custom Logger)
+                    ts.append(matches[0])
 
     return ts
 

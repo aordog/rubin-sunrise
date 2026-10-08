@@ -508,7 +508,7 @@ def test_process_group_first_day(test_date, test_group_id, basic_grid, mock_came
     
     # Verify: 2 upserts + 1 member query + (2 members × 2 inserts) = 7 calls
     assert mock_cur.execute.call_count == 7
-    mock_conn.commit.assert_called_once()
+    # Note: commit is called at populate_database level, not in _process_group
 
 
 def test_process_group_with_mask_accumulation(test_date, test_group_id, basic_grid, 
@@ -539,7 +539,7 @@ def test_process_group_with_mask_accumulation(test_date, test_group_id, basic_gr
     
     # Verify: 2 upserts + 1 query + 2 inserts = 5 calls
     assert mock_cur.execute.call_count == 5
-    mock_conn.commit.assert_called_once()
+    # Note: commit is called at populate_database level, not in _process_group
 
 
 def test_process_group_multiple_members(test_date, test_group_id, basic_grid, 
@@ -572,7 +572,7 @@ def test_process_group_multiple_members(test_date, test_group_id, basic_grid,
     
     # Verify: 2 upserts + 1 query + (3 members × 2 inserts) = 9 calls
     assert mock_cur.execute.call_count == 9
-    mock_conn.commit.assert_called_once()
+    # Note: commit is called at populate_database level, not in _process_group
 
 
 # Tests for populate_database

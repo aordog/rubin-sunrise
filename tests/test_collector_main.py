@@ -4,11 +4,8 @@ Tests the high-level collector entry point orchestration.
 All external dependencies (database, threads, file I/O) are mocked.
 """
 
-import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pathlib import Path
-import sys
-
 import rubin_sunrise.collector.collector_main as collector_main
 
 
@@ -221,10 +218,10 @@ def test_run_collector_opens_log_file(monkeypatch):
         with patch('threading.Event', Mock()):
             collector_main.run_collector()
     
-    # Verify log file was opened for writing
+    # Verify log file was opened in append mode
     assert len(open_calls) == 1
     assert 'log_' in open_calls[0]['file']
-    assert 'w' in open_calls[0]['mode']
+    assert 'a' in open_calls[0]['mode']
 
 
 # ===== Parameter passing tests =====
